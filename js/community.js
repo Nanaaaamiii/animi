@@ -690,10 +690,13 @@
       const q = search.value.trim();
       if (!q) { results.innerHTML = ""; return; }
       const all = window.ANIME_DATA || [];
-      const hit = all.filter(x => (x.title || "").toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+      const hit = all.filter(x => (x.title || "").toLowerCase().includes(q.toLowerCase())).slice(0, 20);
       results.innerHTML = hit.length
-        ? hit.map(a => `<div class="rv-opt" data-id="${a.id}">${esc(a.title)}</div>`).join("")
-        : `<div class="empty" style="padding:10px">没找到匹配的番剧</div>`;
+        ? hit.map(a => `<div class="rv-opt" data-id="${a.id}">
+            <img class="rv-opt-cover" src="${esc(a.cover || "")}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+            <div class="rv-opt-info"><div class="rv-opt-title">${esc(a.title)}</div><div class="rv-opt-meta">${a.rating ? "★ " + a.rating : ""}${a.year ? (a.rating ? " · " : "") + a.year : ""}</div></div>
+          </div>`).join("")
+        : `<div class="empty" style="padding:14px">没找到匹配的番剧</div>`;
       results.querySelectorAll(".rv-opt").forEach(o => o.onclick = () => choose(all.find(x => x.id === +o.dataset.id)));
     });
   }
