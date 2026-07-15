@@ -537,6 +537,14 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .rv-comment-btn { margin-top: 10px; align-self: flex-start; padding: 7px 16px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer; color: var(--accent, #c56cf0); background: var(--surface-2, rgba(255,255,255,.08)); border: 1px solid var(--line, rgba(255,255,255,.14)); }
 .rv-comment-btn:hover { background: var(--accent, #c56cf0); color: #fff; }
 
+/* 用户称号徽章（站长 / 管理员 / 编辑 …） */
+.role-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; line-height: 1.6; vertical-align: middle; margin-left: 2px; }
+.role-owner { background: linear-gradient(135deg, #ffd277, #f6a623); color: #5a3500; box-shadow: 0 1px 4px rgba(246,166,35,.4); }
+.role-admin { background: linear-gradient(135deg, #ff8fb0, #e2556b); color: #fff; }
+.role-editor { background: linear-gradient(135deg, #8fd3ff, #4a9fe8); color: #fff; }
+.role-custom { background: var(--surface-2, rgba(255,255,255,.14)); color: var(--text); border: 1px solid var(--line, rgba(255,255,255,.18)); }
+.uid-line .role-badge { margin-left: 8px; }
+
 .comm-title { font-size: 20px; font-weight: 800; margin-bottom: 10px; }
 .comm-sub { color: var(--text-faint); font-size: 13px; margin-bottom: 16px; }
 .loading, .empty, .err { padding: 40px 10px; text-align: center; color: var(--text-faint); font-size: 14px; }
