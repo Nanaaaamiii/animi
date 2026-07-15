@@ -318,15 +318,22 @@
           <div class="avatar-prev">${av}</div>
           <div class="uid-line">UID：<b>${p.uid != null ? p.uid : "—"}</b>${roleTag(p)}</div>
           ${statsRow}
-          ${following
-            ? `<button class="btn btn-ghost" id="follow-btn" style="width:100%;justify-content:center;margin-top:6px">✓ 已关注</button><button class="btn btn-unfollow" id="unfollow-btn" style="width:100%;justify-content:center;margin-top:6px">取消关注</button>`
-            : `<button class="btn btn-primary" id="follow-btn" style="width:100%;justify-content:center;margin-top:6px">＋ 关注</button>`}
+          <div class="profile-actions">
+            ${following
+              ? `<button class="btn btn-ghost" id="follow-btn">✓ 已关注</button><button class="btn btn-unfollow" id="unfollow-btn">取消关注</button>`
+              : `<button class="btn btn-primary" id="follow-btn">＋ 关注</button>`}
+            <button class="btn btn-ghost" id="dm-btn">✉ 私信</button>
+          </div>
         </div>
         ${tabsHTML}
         <div id="profile-content" class="profile-content"></div>`;
       $("#comm-close").onclick = closeComm;
       $("#follow-btn").onclick = () => toggleFollow(tid);
       const _ub = $("#unfollow-btn"); if (_ub) _ub.onclick = () => toggleFollow(tid);
+      $("#dm-btn").onclick = () => {
+        if (!USER) { openIdentity(); return; }
+        openDMThread(tid, () => openProfile(tid, mask, modal));
+      };
       $("#fs-following").onclick = () => openFollowList("following", tid);
       $("#fs-followers").onclick = () => openFollowList("followers", tid);
       bindProfileTabs(tid, false, $("#profile-content"));
@@ -1373,13 +1380,9 @@
         const convs = Object.values(convMap).sort((a, b) => new Date(b.last.created_at) - new Date(a.last.created_at));
         const names = await fetchNames(convs.map(c => c.other));
         const header = `<button class="modal-close" id="comm-close">✕</button>
-          <div class="comm-title">私信</div>
-          <div class="dm-actions">
-            <input id="dm-to" class="auth-input" placeholder="输入对方 UID 或昵称，发起新私信"/>
-            <button class="btn btn-primary" id="dm-new">发起私信</button>
-          </div>`;
+          <div class="comm-title">私信</div>`;
         if (!convs.length) {
-          modal.innerHTML = header + `<div class="empty">还没有任何私信。去用户主页点「发私信」试试～</div>`;
+          modal.innerHTML = header + `<div class="empty">还没有任何私信。去用户主页点「✉ 私信」即可发起聊天～</div>`;
         } else {
           modal.innerHTML = header + `<div class="dm-list">${convs.map(c => `
             <div class="dm-row" data-other="${c.other}">
@@ -1393,28 +1396,9 @@
           modal.querySelectorAll(".dm-row").forEach(r => r.onclick = () => openDMThread(r.dataset.other));
         }
         $("#comm-close").onclick = closeComm;
-        bindNewDM();
       });
   }
-  function bindNewDM() {
-    const btn = $("#dm-new"); if (!btn) return;
-    btn.onclick = async () => {
-      const v = ($("#dm-to") && $("#dm-to").value || "").trim(); if (!v) return;
-      let otherId = null;
-      const num = parseInt(v, 10);
-      if (!isNaN(num) && String(num) === v) {
-        const { data } = await sb.from("profiles").select("id").eq("uid", num).maybeSingle();
-        otherId = data ? data.id : null;
-      } else {
-        const { data } = await sb.from("profiles").select("id").ilike("username", v).maybeSingle();
-        otherId = data ? data.id : null;
-      }
-      if (!otherId) { toast("未找到该用户"); return; }
-      if (otherId === USER.id) { toast("不能给自己发私信"); return; }
-      openDMThread(otherId);
-    };
-  }
-  async function openDMThread(otherId) {
+  async function openDMThread(otherId, onClose) {
     const mask = $("#comm-mask"), modal = $("#comm-modal");
     const names = await fetchNames([otherId]);
     const p = names[otherId] || {};
@@ -1429,7 +1413,7 @@
           <button class="btn btn-primary" id="dm-send">发送</button>
         </div>
       </div>`;
-    $("#comm-close").onclick = () => { closeComm(); openDMInbox(); };
+    $("#comm-close").onclick = () => { closeComm(); (onClose || openDMInbox)(); };
     try { await sb.rpc("dm_mark_read", { p_other: otherId }); } catch (_) {}
     refreshMsgDot();
     await renderDMThread(otherId);
