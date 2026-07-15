@@ -148,6 +148,7 @@
     const lv = p.level || 1;
     el.innerHTML = `<button class="chip-btn" id="chip-name">${avatarHTML(p, USER.id, "sm")}<span class="chip-txt">${esc(name)}</span><span class="chip-lv">Lv${lv}</span></button>`;
     $("#chip-name", el).onclick = openIdentity;
+    refreshMsgDot();   // 登录态变化后刷新私信红点 / 图标显隐
   }
 
   /* ---------------- 身份入口（未登录=登录注册；已登录=资料） ---------------- */
@@ -169,6 +170,8 @@
         <input id="au-email" class="auth-input" type="email" placeholder="you@example.com" autocomplete="email"/></div>
       <div class="cb-row"><span class="cb-label">密码</span>
         <input id="au-pass" class="auth-input" type="password" placeholder="至少 6 位" autocomplete="current-password"/></div>
+      <div class="cb-row au-name-row" style="display:none"><span class="cb-label">昵称</span>
+        <input id="au-name" class="auth-input" type="text" placeholder="设置昵称（注册后可在资料修改）" maxlength="20"/></div>
       <div class="auth-err" id="au-err"></div>
       <button class="btn btn-primary" id="au-submit" style="width:100%;justify-content:center">登录</button>
       <div class="auth-hint">注册即获得 UID（按注册顺序分配），密码仅作演示用途，请使用真实邮箱以便找回。</div>`;
@@ -176,6 +179,7 @@
     $$(".auth-tab", modal).forEach(t => t.onclick = () => {
       $$(".auth-tab", modal).forEach(x => x.classList.remove("active")); t.classList.add("active");
       $("#au-submit").textContent = t.dataset.tab === "login" ? "登录" : "注册";
+      const nr = $(".au-name-row", modal); if (nr) nr.style.display = t.dataset.tab === "register" ? "" : "none";
       $("#au-err").textContent = "";
     });
     $("#au-submit").onclick = async () => {
@@ -187,6 +191,13 @@
       if (pass.length < 6) { err.textContent = "密码至少 6 位"; return; }
       err.textContent = "处理中…";
       if (tab === "register") {
+        // 昵称：注册时必须填写，且不可与已有用户重名
+        const name = ($("#au-name") ? $("#au-name").value.trim() : "");
+        if (name.length < 2) { err.textContent = "请设置至少 2 个字的昵称"; return; }
+        try {
+          const { data: taken, error: rpcErr } = await sb.rpc("username_taken", { p_name: name });
+          if (!rpcErr && taken) { err.textContent = "昵称已被使用，请换一个"; return; }
+        } catch (_) { /* 后端尚未就绪则放行，由唯一约束兜底 */ }
         // 防重复注册：注册前先查该邮箱是否已存在（需 SQL 已部署 email_taken + profiles.email 唯一约束）
         try {
           const { data: taken, error: rpcErr } = await sb.rpc("email_taken", { p_email: email });
@@ -195,7 +206,11 @@
         const { data, error } = await sb.auth.signUp({ email, password: pass });
         if (error) { err.textContent = "注册失败：" + error.message; return; }
         if (data.session) {
-          USER = data.session.user; await ensureProfile(); renderUserChip(); closeComm(); toast("注册成功，已登录");
+          USER = data.session.user;
+          await ensureProfile();
+          // 用用户自选昵称覆盖默认生成的昵称（唯一约束兜底防重名）
+          try { await sb.from("profiles").update({ username: name }).eq("id", USER.id); } catch (_) {}
+          await ensureProfile(); renderUserChip(); closeComm(); toast("注册成功，已登录");
         } else {
           err.textContent = "注册成功！请前往邮箱点击验证链接完成激活后登录。";
         }
@@ -368,7 +383,15 @@
       const v = $("#id-name").value.trim();
       const bioVal = $("#id-bio").value.trim();
       const file = $("#avatar-file").files[0];
-      const { error } = await sb.from("profiles").update({ username: v || ("用户" + USER.id.slice(0, 8)) }).eq("id", USER.id);
+      const cur = (USER.profile && USER.profile.username) || "";
+      // 改名且昵称与现有不同时，先查重（防重名）
+      if (v && v !== cur) {
+        try {
+          const { data: taken } = await sb.rpc("username_taken", { p_name: v, p_self: USER.id });
+          if (taken) { $("#id-err").textContent = "昵称已被使用，请换一个"; return; }
+        } catch (_) { /* 后端未就绪则交由唯一约束兜底 */ }
+      }
+      const { error } = await sb.from("profiles").update({ username: v || cur }).eq("id", USER.id);
       if (error) { $("#id-err").textContent = "保存失败：" + error.message; return; }
       if (file || bioVal !== (p.bio || "")) {
         try {
@@ -543,6 +566,7 @@
     const mask = $("#comm-mask");
     if (mask) mask.addEventListener("click", (e) => { if (e.target.id === "comm-mask") closeComm(); });
     const np = $("#new-post-btn"); if (np) np.onclick = () => { if (!USER) { openIdentity(); return; } composePost(); };
+    const mi = $("#msg-icon"); if (mi) mi.onclick = () => openDMInbox();   // 私信入口（未登录时 hidden）
     const tabs = $("#comm-tabs");
     if (tabs) tabs.addEventListener("click", (e) => {
       const b = e.target.closest(".comm-tab"); if (!b) return;
@@ -744,6 +768,31 @@
     try { const r = await sb.from("anime_comments").select("*", { count: "exact", head: true }).eq("anime_id", a.id).is("parent_id", null); count = r.count || 0; } catch (e) {}
     box.innerHTML = `<button class="btn btn-ghost" id="open-anime-discuss" style="margin-top:14px;width:100%;justify-content:center">💬 社区讨论 ${count}</button>`;
     $("#open-anime-discuss", box).onclick = () => openAnimeDiscussion(a.id, a.title);
+    // 管理员：本番可一键加入 / 移出「站长推荐」
+    if (isAdmin()) {
+      try {
+        const { data } = await sb.from("recommendations").select("anime_id").eq("anime_id", a.id).maybeSingle();
+        const inRec = !!data;
+        const recBtn = document.createElement("button");
+        recBtn.className = "btn btn-ghost";
+        recBtn.style.cssText = "margin-top:10px;width:100%;justify-content:center";
+        recBtn.textContent = inRec ? "★ 移出站长推荐" : "＋ 加入站长推荐";
+        recBtn.onclick = async () => {
+          if (!isAdmin()) return;
+          if (inRec) {
+            const { error } = await sb.from("recommendations").delete().eq("anime_id", a.id);
+            if (error) { toast("操作失败：" + error.message); return; }
+            recBtn.textContent = "＋ 加入站长推荐"; toast("已移出站长推荐");
+          } else {
+            const { error } = await sb.from("recommendations").insert({ anime_id: a.id, added_by: USER.id });
+            if (error) { toast("操作失败：" + error.message); return; }
+            recBtn.textContent = "★ 移出站长推荐"; toast("已加入站长推荐");
+          }
+          const host = $("#picks-grid"); if (host) renderOwnerPicks(host);
+        };
+        box.appendChild(recBtn);
+      } catch (_) {}
+    }
   }
 
   function buildTree(comments) {
@@ -1172,11 +1221,275 @@
     try {
       sb.channel("forum-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "forum_comments" }, () => { if (currentPostId) openPost(currentPostId); }).subscribe();
       sb.channel("anime-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "anime_comments" }, (p) => { if (currentAnimeId && p.new.anime_id === currentAnimeId) openAnimeDiscussion(currentAnimeId); }).subscribe();
+      // 私信：只监听「发给我的新消息」→ 刷新红点（RLS 保证仅接收方可见）
+      if (USER) {
+        sb.channel("dm-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${USER.id}` }, () => { refreshMsgDot(); }).subscribe();
+      }
     } catch (e) { console.warn("realtime 订阅失败", e); }
   }
 
+  /* ---------------- 用户搜索（昵称 / UID） ---------------- */
+  async function searchUsers(q, cb) {
+    if (!sb || !USER) { if (cb) cb([]); return; }
+    const trimmed = (q || "").trim();
+    if (!trimmed) { if (cb) cb([]); return; }
+    try {
+      const num = parseInt(trimmed, 10);
+      let data = [];
+      if (!isNaN(num) && String(num) === trimmed) {
+        const { data: byUid } = await sb.from("profiles").select("id,username,avatar_url,uid,role").eq("uid", num).limit(12);
+        data = byUid || [];
+        if (data.length < 12) {
+          const { data: byName } = await sb.from("profiles").select("id,username,avatar_url,uid,role").ilike("username", "%" + trimmed + "%").limit(12);
+          const have = new Set(data.map(x => x.id));
+          data = data.concat((byName || []).filter(x => !have.has(x.id)));
+        }
+      } else {
+        const { data: byName } = await sb.from("profiles").select("id,username,avatar_url,uid,role").ilike("username", "%" + trimmed + "%").limit(12);
+        data = byName || [];
+      }
+      let followingMap = {};
+      if (data.length) {
+        const { data: fr } = await sb.from("follows").select("following_id").eq("follower_id", USER.id).in("following_id", data.map(u => u.id));
+        (fr || []).forEach(r => followingMap[r.following_id] = true);
+      }
+      const rows = data.map(u => ({
+        id: u.id, username: u.username, avatar_url: u.avatar_url, uid: u.uid, role: u.role,
+        following: !!followingMap[u.id], isSelf: u.id === USER.id
+      }));
+      if (cb) cb(rows);
+    } catch (_) { if (cb) cb([]); }
+  }
+
+  /* ---------------- 站长推荐（仅 站长/管理员 可编辑） ---------------- */
+  // 兼容 app.js 注入的卡片渲染（若未注入则用内置兜底）
+  function ownerCard(a) {
+    const fn = window.Community && window.Community.cardHTML;
+    if (fn) return fn(a);
+    const statusCls = a.status === "连载中" ? "on" : "end";
+    const rtxt = (a.rating_count != null && a.rating_count < 70) ? "暂无" : (a.rating ? a.rating.toFixed(1) : "暂无");
+    return `<article class="anime-card tilt" data-id="${a.id}">
+      <div class="cover" style="background-image:${grad(a.id)}">
+        <img class="img" src="${a.cover}" alt="${esc(a.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+        <div class="ov"></div>
+        <div class="status-tag ${statusCls}">${a.status}</div>
+      </div>
+      <div class="meta"><div class="title">${esc(a.title)}</div>
+        <div class="sub">${a.date} · ${a.status}</div>
+        <div class="row"><span class="rate">${STAR}${rtxt}</span></div>
+      </div></article>`;
+  }
+  async function renderOwnerPicks(host) {
+    if (!host) return;
+    host.innerHTML = `<div class="loading">加载站长推荐…</div>`;
+    if (!sb) { host.innerHTML = `<div class="empty">社区模块未初始化。</div>`; return; }
+    const { data, error } = await sb.from("recommendations").select("anime_id,note").order("created_at", { ascending: false }).limit(30);
+    if (error) { host.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    const ids = (data || []).map(r => r.anime_id);
+    const anime = ids.map(id => window.ANIME_DATA.find(x => x.id === id)).filter(Boolean);
+    if (!anime.length) {
+      host.innerHTML = `<div class="cal-empty" style="grid-column:1/-1;padding:40px">站长还没推荐番剧～` +
+        (isAdmin() ? `<div style="margin-top:12px"><button class="btn btn-primary" id="op-add">＋ 添加站长推荐</button></div>` : ``) + `</div>`;
+      const ba = $("#op-add", host); if (ba) ba.onclick = openOwnerPickAdder;
+      return;
+    }
+    host.innerHTML = anime.map((a, i) => ownerCard(a) +
+      (isAdmin() ? `<button class="op-remove" data-id="${a.id}" title="移出站长推荐">✕</button>` : "")).join("") +
+      (isAdmin() ? `<div style="grid-column:1/-1;text-align:center;margin-top:8px"><button class="btn btn-ghost" id="op-add">＋ 添加 / 管理</button></div>` : "");
+    host.querySelectorAll(".anime-card").forEach(c => c.onclick = () => openAnimeDetail(c.dataset.id));
+    host.querySelectorAll(".op-remove").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      await sb.from("recommendations").delete().eq("anime_id", +b.dataset.id);
+      toast("已移出站长推荐"); renderOwnerPicks(host);
+    });
+    const ba = $("#op-add", host); if (ba) ba.onclick = openOwnerPickAdder;
+  }
+  // 管理员添加推荐：本地库搜索番剧
+  function openOwnerPickAdder() {
+    if (!isAdmin()) { toast("仅站长可操作"); return; }
+    const mask = $("#comm-mask"), modal = $("#comm-modal");
+    modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button>
+      <div class="comm-title">添加站长推荐</div>
+      <div class="cb-row"><span class="cb-label">番剧</span>
+        <input id="op-q" class="auth-input" placeholder="输入番剧名称或 Bangumi ID" /></div>
+      <div class="auth-err" id="op-err"></div>
+      <div id="op-res" class="op-res"></div>`;
+    $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
+    const q = $("#op-q"), res = $("#op-res"), err = $("#op-err");
+    q.addEventListener("input", () => {
+      const t = q.value.trim();
+      if (!t) { res.innerHTML = ""; return; }
+      const num = parseInt(t, 10);
+      const list = (window.ANIME_DATA || []).filter(a => {
+        if (!isNaN(num) && String(num) === t && a.id === num) return true;
+        return (a.title + a.jp + a.en).toLowerCase().includes(t.toLowerCase());
+      }).slice(0, 12);
+      if (!list.length) { res.innerHTML = `<div class="empty">未找到匹配番剧</div>`; return; }
+      res.innerHTML = list.map(a => `<div class="op-item" data-id="${a.id}">
+        <img class="op-thumb" src="${esc(a.cover)}" onerror="this.style.display='none'"/>
+        <div class="op-info"><div class="op-name">${esc(a.title)}</div><div class="op-sub">${a.date||""}</div></div>
+        <button class="btn btn-primary op-add-btn">添加</button></div>`).join("");
+      res.querySelectorAll(".op-item").forEach(it => it.querySelector(".op-add-btn").onclick = () => addOwnerPick(+it.dataset.id));
+    });
+  }
+  async function addOwnerPick(id) {
+    if (!isAdmin()) { toast("仅站长可操作"); return; }
+    const { error } = await sb.from("recommendations").insert({ anime_id: id, added_by: USER.id });
+    if (error) { toast("添加失败：" + error.message); return; }
+    toast("已加入站长推荐");
+    const host = $("#picks-grid"); if (host) renderOwnerPicks(host);
+    closeComm();
+  }
+
+  /* ---------------- 私信 / 站内信 ---------------- */
+  async function refreshMsgDot() {
+    const icon = $("#msg-icon"), dot = $("#msg-dot");
+    if (!icon) return;
+    if (!USER) { icon.hidden = true; return; }
+    icon.hidden = false;
+    if (!dot) return;
+    try {
+      const { data } = await sb.rpc("dm_unread_count");
+      const n = data || 0;
+      dot.hidden = n <= 0;
+      dot.textContent = n > 99 ? "99+" : String(n || "");
+    } catch (_) { dot.hidden = true; }
+  }
+  function openDMInbox() {
+    if (!USER) { openIdentity(); return; }
+    const mask = $("#comm-mask"), modal = $("#comm-modal");
+    modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="loading">加载私信…</div>`;
+    $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
+    const me = USER.id;
+    sb.from("messages").select("*").or(`sender_id.eq.${me},receiver_id.eq.${me}`).order("created_at", { ascending: false }).limit(200)
+      .then(async ({ data, error }) => {
+        if (error) { modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="err">${esc(error.message)}</div>`; $("#comm-close").onclick = closeComm; return; }
+        const convMap = {};
+        (data || []).forEach(m => {
+          const other = m.sender_id === me ? m.receiver_id : m.sender_id;
+          if (!convMap[other]) convMap[other] = { other, last: m, unread: 0 };
+          if (m.sender_id !== me && !m.read) convMap[other].unread++;
+        });
+        const convs = Object.values(convMap).sort((a, b) => new Date(b.last.created_at) - new Date(a.last.created_at));
+        const names = await fetchNames(convs.map(c => c.other));
+        const header = `<button class="modal-close" id="comm-close">✕</button>
+          <div class="comm-title">私信</div>
+          <div class="dm-actions">
+            <input id="dm-to" class="auth-input" placeholder="输入对方 UID 或昵称，发起新私信"/>
+            <button class="btn btn-primary" id="dm-new">发起私信</button>
+          </div>`;
+        if (!convs.length) {
+          modal.innerHTML = header + `<div class="empty">还没有任何私信。去用户主页点「发私信」试试～</div>`;
+        } else {
+          modal.innerHTML = header + `<div class="dm-list">${convs.map(c => `
+            <div class="dm-row" data-other="${c.other}">
+              ${avatarHTML(names[c.other], c.other, "sm")}
+              <div class="dm-row-meta">
+                <div class="dm-row-name">${esc((names[c.other] && names[c.other].username) || "用户")}</div>
+                <div class="dm-row-last">${esc((c.last.body || (c.last.images && c.last.images.length ? "[图片]" : "")).slice(0, 30))}</div>
+              </div>
+              ${c.unread ? `<span class="dm-unread">${c.unread}</span>` : ""}
+            </div>`).join("")}</div>`;
+          modal.querySelectorAll(".dm-row").forEach(r => r.onclick = () => openDMThread(r.dataset.other));
+        }
+        $("#comm-close").onclick = closeComm;
+        bindNewDM();
+      });
+  }
+  function bindNewDM() {
+    const btn = $("#dm-new"); if (!btn) return;
+    btn.onclick = async () => {
+      const v = ($("#dm-to") && $("#dm-to").value || "").trim(); if (!v) return;
+      let otherId = null;
+      const num = parseInt(v, 10);
+      if (!isNaN(num) && String(num) === v) {
+        const { data } = await sb.from("profiles").select("id").eq("uid", num).maybeSingle();
+        otherId = data ? data.id : null;
+      } else {
+        const { data } = await sb.from("profiles").select("id").ilike("username", v).maybeSingle();
+        otherId = data ? data.id : null;
+      }
+      if (!otherId) { toast("未找到该用户"); return; }
+      if (otherId === USER.id) { toast("不能给自己发私信"); return; }
+      openDMThread(otherId);
+    };
+  }
+  async function openDMThread(otherId) {
+    const mask = $("#comm-mask"), modal = $("#comm-modal");
+    const names = await fetchNames([otherId]);
+    const p = names[otherId] || {};
+    modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button>
+      <div class="comm-title">💬 与 ${esc(p.username || "用户")} 的私信</div>
+      <div class="dm-thread" id="dm-thread"><div class="loading">加载中…</div></div>
+      <div class="dm-composer">
+        <div class="ac-thumbs" id="dm-thumbs"></div>
+        <div class="dm-bar">
+          <label class="ac-imgbtn" title="插入图片">🖼️<input type="file" id="dm-file" accept="image/*" multiple hidden></label>
+          <textarea id="dm-input" class="cb-textarea" placeholder="说点什么…"></textarea>
+          <button class="btn btn-primary" id="dm-send">发送</button>
+        </div>
+      </div>`;
+    $("#comm-close").onclick = () => { closeComm(); openDMInbox(); };
+    try { await sb.rpc("dm_mark_read", { p_other: otherId }); } catch (_) {}
+    refreshMsgDot();
+    await renderDMThread(otherId);
+    let dmImgs = [];
+    const thumbs = $("#dm-thumbs"), file = $("#dm-file");
+    function renderDMThumbs() {
+      if (!thumbs) return;
+      thumbs.innerHTML = dmImgs.map((f, i) => `<div class="ac-thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="ac-thumb-x" data-i="${i}">✕</button></div>`).join("");
+      thumbs.querySelectorAll(".ac-thumb-x").forEach(b => b.onclick = () => { dmImgs.splice(+b.dataset.i, 1); renderDMThumbs(); });
+    }
+    if (file) file.addEventListener("change", () => {
+      for (const f of [...(file.files || [])]) {
+        if (!f.type.startsWith("image/")) { toast("只能插入图片"); continue; }
+        if (f.size > 5 * 1024 * 1024) { toast("单张图片不能超过 5MB"); continue; }
+        if (dmImgs.length >= 6) { toast("最多插入 6 张图片"); break; }
+        dmImgs.push(f);
+      }
+      file.value = ""; renderDMThumbs();
+    });
+    $("#dm-send").onclick = async () => {
+      if (!USER) return;
+      const v = ($("#dm-input") && $("#dm-input").value || "").trim();
+      if (!v && !dmImgs.length) return;
+      const btn = $("#dm-send"); btn.disabled = true; const old = btn.textContent;
+      try {
+        let imgUrls = [];
+        if (dmImgs.length) { btn.textContent = "上传中…"; for (const f of dmImgs) imgUrls.push(await uploadCommentImage(f)); }
+        const { error } = await sb.from("messages").insert({ sender_id: USER.id, receiver_id: otherId, body: v, images: imgUrls });
+        if (error) { toast("发送失败：" + error.message); return; }
+        $("#dm-input").value = ""; dmImgs = []; if (thumbs) thumbs.innerHTML = "";
+        await renderDMThread(otherId);
+      } catch (e) { toast("图片上传失败：" + (e.message || e)); }
+      finally { btn.disabled = false; btn.textContent = old; }
+    };
+  }
+  async function renderDMThread(otherId) {
+    const host = $("#dm-thread"); if (!host) return;
+    const { data, error } = await sb.from("messages").select("*")
+      .or(`and(sender_id.eq.${USER.id},receiver_id.eq.${otherId}),and(sender_id.eq.${otherId},receiver_id.eq.${USER.id})`)
+      .order("created_at", { ascending: true });
+    if (error) { host.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    const names = await fetchNames([otherId, USER.id]);
+    if (!data || !data.length) { host.innerHTML = `<div class="empty">还没有消息，发一条打个招呼吧～</div>`; return; }
+    host.innerHTML = data.map(m => {
+      const mine = m.sender_id === USER.id;
+      const who = mine ? USER.id : otherId;
+      const imgs = (m.images && m.images.length) ? `<div class="c-imgs">${m.images.map(u => `<img class="c-img" src="${esc(u)}" alt="配图" loading="lazy" onclick="window.__cbLightbox && window.__cbLightbox('${esc(u)}')">`).join("")}</div>` : "";
+      return `<div class="dm-msg ${mine ? "mine" : ""}">
+        ${avatarHTML(names[who], who, "xs")}
+        <div class="dm-bubble">${m.body ? `<div class="dm-text">${esc(m.body)}</div>` : ""}${imgs}<div class="dm-time">${timeAgo(m.created_at)}</div></div>
+      </div>`;
+    }).join("");
+    host.scrollTop = host.scrollHeight;
+  }
+
   /* ---------------- 导出 ---------------- */
-  window.Community = { init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum, openReviewComposer };
+  window.Community = {
+    init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum, openReviewComposer,
+    searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot
+  };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
