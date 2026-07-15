@@ -146,6 +146,7 @@
   }
   let calSel = seasonOfDate(new Date());   // 每季度模式下的选中季度
   let calMode = "week";                     // "week"=本周放送(锁定当前真实季度) | "season"=每季度(可翻季)
+  let calExpanded = {};                     // 每日「展开全部」状态，key=星期(1-7)
   function renderCalendar() {
     const grid = $("#cal-grid");
     const nav = $("#cal-season-nav");
@@ -162,8 +163,8 @@
           <button class="cal-nav-btn" id="cal-prev">‹ 上季</button>
           <div class="cal-nav-cur">${calSel.year} 年 ${calSel.season}季</div>
           <button class="cal-nav-btn" id="cal-next">下季 ›</button>`;
-        $("#cal-prev").onclick = () => { calSel = prev; renderCalendar(); };
-        $("#cal-next").onclick = () => { calSel = next; renderCalendar(); };
+        $("#cal-prev").onclick = () => { calSel = prev; calExpanded = {}; renderCalendar(); };
+        $("#cal-next").onclick = () => { calSel = next; calExpanded = {}; renderCalendar(); };
       } else {
         nav.style.display = "none"; nav.innerHTML = "";
       }
@@ -180,8 +181,15 @@
       // 选中季度的番剧，按放送星期归列（下季度数据一进来就显示）
       const list = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) === wd && (!airingOnly || isAiringNow(a)))
                        .sort((x, y) => (y.rating || 0) - (x.rating || 0));
-      const shown = list.slice(0, 12);
-      const extra = list.length - shown.length;
+      const expanded = !!calExpanded[wd];
+      const shown = expanded ? list : list.slice(0, 12);
+      const overflow = list.length - 12;
+      let moreHtml = "";
+      if (list.length > 12) {
+        moreHtml = expanded
+          ? `<div class="cal-more" onclick="if(window.__toggleCalDay)window.__toggleCalDay(${wd})">收起 ▲</div>`
+          : `<div class="cal-more" onclick="if(window.__toggleCalDay)window.__toggleCalDay(${wd})">＋${overflow} 部，点击展开全部</div>`;
+      }
       const items = shown.length
         ? shown.map(a => `
             <div class="cal-item" data-id="${a.id}" onclick="if(window.openModal)openModal(${a.id})">
@@ -190,7 +198,7 @@
                 <div class="t">${esc(a.title)}</div>
                 <div class="r">${star}${rateTxt(a.rating)}</div>
               </div>
-            </div>`).join("") + (extra > 0 ? `<div class="cal-more">＋${extra} 部…</div>` : "")
+            </div>`).join("") + moreHtml
         : `<div class="cal-empty">— 暂无 —</div>`;
       return `
       <div class="cal-col" data-wd="${wd}">
@@ -199,6 +207,11 @@
       </div>`;
     }).join("");
   }
+  // 每日「展开/收起全部」：供日历卡片下方的「＋N 部，点击展开全部」内联调用
+  window.__toggleCalDay = function (wd) {
+    calExpanded[wd] = !calExpanded[wd];
+    renderCalendar();
+  };
   function markToday() {
     const js = new Date().getDay();          // 0=Sun
     const wd = js === 0 ? 7 : js;            // 1=Mon..7=Sun
@@ -211,6 +224,7 @@
     tabs.addEventListener("click", (e) => {
       const b = e.target.closest(".cal-tab"); if (!b) return;
       calMode = b.dataset.mode;
+      calExpanded = {};
       $$(".cal-tab", tabs).forEach(t => t.classList.toggle("active", t === b));
       renderCalendar(); markToday();
     });
