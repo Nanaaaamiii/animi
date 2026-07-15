@@ -232,10 +232,9 @@
     document.body.style.overflow = "hidden";
     setupCollectBox(a);
     if (window.Community) Community.onModalOpen(a);
-    window.openModal = openModal;
   }
+  window.openModal = openModal;   // 顶层挂载，供社区/其它模块随时调用
   function closeModal() {
-    $("#modal-mask").classList.remove("open");
     document.body.style.overflow = "";
   }
 
