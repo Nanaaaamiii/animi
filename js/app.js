@@ -55,7 +55,7 @@
   }
 
   /* ---------------- 视图切换 (SPA) ---------------- */
-  const views = ["home", "calendar", "browse", "rank", "community", "mine"];
+  const views = ["home", "calendar", "browse", "game", "community", "mine"];
   function showView(name) {
     if (!views.includes(name)) name = "home";
     views.forEach(v => $("#view-" + v).classList.toggle("hidden", v !== name));
@@ -65,11 +65,12 @@
     // 重放进入动画
     requestAnimationFrame(() => {
       $$(".reveal", root).forEach(el => el.classList.add("in"));
-      ["card-grid", "cal-grid", "rank-list", "mine-grid"].forEach(cls => { const g = $("." + cls, root); if (g) g.classList.add("in"); });
+      ["card-grid", "cal-grid", "mine-grid", "game-root"].forEach(cls => { const g = $("." + cls, root); if (g) g.classList.add("in"); });
     });
     if (name === "calendar") { renderCalendar(); markToday(); }
     if (name === "mine") renderMine();
     if (name === "community" && window.Community) Community.renderForum();
+    if (name === "game") renderGameRoot();
   }
 
   /* ---------------- 首页 ---------------- */
@@ -83,31 +84,210 @@
     const picks = [...DATA].sort((x, y) => y.rating - x.rating).slice(0, 8);
     $("#picks-grid").innerHTML = picks.map(a => cardHTML(a)).join("");
 
-    // 人气榜预览（Top 5）
-    const top = [...DATA].sort((x, y) => y.rating - x.rating).slice(0, 5);
-    $("#top5").innerHTML = top.map((a, i) => rankItemHTML(a, i + 1)).join("");
+    // 动画小游戏入口卡
+    const promo = [
+      { icon: "🎯", t: "猜动画评分", d: "哪部番评分更高？50 题答对 30 题即通关", tag: "热门" },
+    ];
+    $("#game-promo").innerHTML = promo.map(p => `
+      <div class="game-promo-card" data-view="game">
+        <div class="gp-icon">${p.icon}</div>
+        <div class="gp-body">
+          <div class="gp-title">${p.t} <span class="gp-tag">${p.tag}</span></div>
+          <div class="gp-desc">${p.d}</div>
+        </div>
+        <div class="gp-go">开始 →</div>
+      </div>`).join("");
+    bindTilt($("#game-promo")); bindRipple($("#game-promo"));
 
-    // 首页卡片交互（本季轮播 / 编辑推荐 / 人气榜）
-    ["#featured-carousel", "#picks-grid", "#top5"].forEach(sel => { bindTilt($(sel)); bindRipple($(sel)); });
+    // 首页卡片交互（本季轮播 / 编辑推荐）
+    ["#featured-carousel", "#picks-grid"].forEach(sel => { bindTilt($(sel)); bindRipple($(sel)); });
   }
 
-  /* ---------------- 排行榜 ---------------- */
-  function rankItemHTML(a, no) {
-    return `
-    <div class="rank-item" data-id="${a.id}">
-      <div class="rank-no">${no}</div>
-      <div class="rank-thumb" style="background-image:url('${a.cover}'), ${cover(a.id)}"></div>
-      <div class="rank-info">
-        <div class="t">${esc(a.title)}</div>
-        <div class="s">${esc(a.jp)}${a.season ? " · " + a.season + "季" : ""}</div>
-        <div class="chip-row" style="margin-top:6px"><span class="chip">${a.status}</span></div>
+  /* ================= 动画小游戏：猜动画评分 =================
+     规则：从动画库随机抽两部（无封面/无评分/年份异常已排除），让用户猜哪部评分更高。
+     上线 50 题，答对 30 题通关；每人 5 次答错机会。用户可自选对比的年份区间。
+     评分人数(<50)过滤：数据无该字段，改用浏览器实时拉取 Bangumi 的 rating.total，
+     不足 50 人则换一部；离线/被拦截时静默回退烘焙评分（不强制过滤）。 */
+  const GAME = { TOTAL: 50, PASS: 30, MAX_WRONG: 5, MIN_VOTES: 50 };
+  const _metaCache = new Map();   // id -> {score,total}（仅缓存成功结果）
+  // 实时评分元信息（分数 + 评分人数）
+  function fetchMeta(a) {
+    if (_metaCache.has(a.id)) return Promise.resolve(_metaCache.get(a.id));
+    return new Promise(resolve => {
+      let done = false;
+      const finish = v => { if (done) return; done = true; if (v) _metaCache.set(a.id, v); resolve(v); };
+      const to = setTimeout(() => finish(null), 2600);
+      try {
+        fetch("https://api.bgm.tv/subject/" + a.id, { headers: { "Accept": "application/json" } })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => {
+            clearTimeout(to);
+            if (d && d.rating) finish({ score: (d.rating.score != null ? d.rating.score : a.rating), total: (d.rating.total != null ? d.rating.total : null) });
+            else finish(null);
+          })
+          .catch(() => { clearTimeout(to); finish(null); });
+      } catch (e) { clearTimeout(to); finish(null); }
+    });
+  }
+  // 构建候选池：有封面 + 评分有效 + 年份在 [from,to] 且合理(>=1980)
+  function buildGamePool(fromY, toY) {
+    return DATA.filter(a =>
+      a && a.cover && a.rating != null && a.rating > 0 &&
+      a.year >= Math.max(1980, fromY) && a.year <= toY);
+  }
+  let _game = null;   // 当前对局状态
+  function renderGameRoot() {
+    const root = $("#game-root");
+    if (!root) return;
+    // 可选年份范围（数据里实际存在的合理年份）
+    const yrs = [...new Set(DATA.map(a => a.year).filter(y => y >= 1980 && y <= 2026))].sort((x, y) => x - y);
+    const yMin = yrs[0], yMax = yrs[yrs.length - 1];
+    const opt = (y, sel) => `<option value="${y}" ${y === sel ? "selected" : ""}>${y}</option>`;
+    root.innerHTML = `
+      <div class="game-card-setup">
+        <p class="game-lead">凭直觉猜猜看：下面两部番，<b>哪一部评分更高</b>？答对 ${GAME.PASS} / ${GAME.TOTAL} 题即可通关，答错 ${GAME.MAX_WRONG} 次游戏结束。可选对比年份区间。</p>
+        <div class="game-setup-row">
+          <label class="game-field">
+            <span>起始年份</span>
+            <select id="game-yfrom">${yrs.map(y => opt(y, yMin)).join("")}</select>
+          </label>
+          <span class="game-tilde">～</span>
+          <label class="game-field">
+            <span>结束年份</span>
+            <select id="game-yto">${yrs.map(y => opt(y, yMax)).join("")}</select>
+          </label>
+          <button class="btn btn-primary game-start" id="game-start">开始游戏</button>
+        </div>
+        <p class="game-hint">仅使用有封面、评分人数 ≥ ${GAME.MIN_VOTES} 的番剧（评分人数实时取自 Bangumi）。</p>
+      </div>`;
+    $("#game-start").addEventListener("click", () => {
+      let fromY = parseInt($("#game-yfrom").value, 10);
+      let toY = parseInt($("#game-yto").value, 10);
+      if (fromY > toY) { const t = fromY; fromY = toY; toY = t; }
+      const pool = buildGamePool(fromY, toY);
+      if (pool.length < 2) { alert("该年份区间内可用番剧不足 2 部，请扩大范围。"); return; }
+      _game = { pool, fromY, toY, idx: 0, correct: 0, wrong: 0, pair: null, busy: false };
+      renderQuestion();
+    });
+  }
+  async function renderQuestion() {
+    const root = $("#game-root"); if (!_game) return;
+    if (isGameOver()) return;
+    _game.busy = true;
+    root.innerHTML = gameHUD() + `
+      <div class="game-arena" id="game-arena">
+        <div class="game-load">准备题目中…</div>
+      </div>`;
+    let pair = null;
+    for (let i = 0; i < 50 && !pair; i++) pair = await pickPair(_game.pool);
+    if (!pair) { root.innerHTML = gameHUD() + `<div class="game-end"><h2>没有符合条件的番剧 😢</h2><button class="btn btn-ghost" onclick="if(window.renderGameRoot)renderGameRoot()">返回</button></div>`; return; }
+    _game.pair = pair; _game.busy = false;
+    const arena = $("#game-arena");
+    arena.innerHTML = `
+      <div class="game-vs-label">哪一部评分更高？</div>
+      <div class="game-cards">
+        ${gameCardHTML(pair.a, "L")}
+        <div class="game-vs">VS</div>
+        ${gameCardHTML(pair.b, "R")}
       </div>
-      <div class="rank-rate">${star}${rateTxt(a.rating)}</div>
-    </div>`;
+      <div class="game-feedback" id="game-feedback"></div>`;
+    bindGameCards();
   }
-  function renderRank() {
-    const top = [...DATA].sort((x, y) => y.rating - x.rating).slice(0, 20);
-    $("#rank-list").innerHTML = top.map((a, i) => rankItemHTML(a, i + 1)).join("");
+  function gameCardHTML(a, side) {
+    return `
+      <div class="game-card" data-side="${side}" data-id="${a.id}">
+        <div class="game-cover" style="background-image:url('${a.cover}')"></div>
+        <div class="game-title">${esc(a.title)}</div>
+        <div class="game-sub">${esc(a.jp || "")}</div>
+        <div class="game-reveal" data-side="${side}"></div>
+      </div>`;
+  }
+  function bindGameCards() {
+    $$("#game-arena .game-card").forEach(c => {
+      c.addEventListener("click", () => {
+        if (!_game || _game.busy || _game.pair.revealed) return;
+        onAnswer(c.dataset.side);
+      });
+    });
+  }
+  function onAnswer(side) {
+    const p = _game.pair; if (p.revealed) return;
+    p.revealed = true;
+    const sa = p.sa, sb = p.sb;
+    const higherSide = sa === sb ? null : (sa > sb ? "L" : "R");
+    const correct = (higherSide === side);
+    if (correct) _game.correct++; else _game.wrong++;
+    // 渲染揭晓
+    $$("#game-arena .game-card").forEach(card => {
+      const s = card.dataset.side;
+      const sc = s === "L" ? sa : sb;
+      const rev = card.querySelector(".game-reveal");
+      rev.innerHTML = `<span class="game-rate">${rateTxt(sc)}</span>`;
+      card.classList.add("revealed");
+      if (s === higherSide) card.classList.add("win");
+      else if (s !== side) card.classList.add("lose");
+      else card.classList.add("pick-wrong");
+    });
+    const fb = $("#game-feedback");
+    fb.className = "game-feedback " + (correct ? "ok" : "bad");
+    fb.innerHTML = correct
+      ? `✅ 答对了！${esc(p[higherSide === "L" ? "a" : "b"].title)} 评分更高`
+      : `❌ 答错了。其实是 <b>${esc(p[higherSide === "L" ? "a" : "b"].title)}</b> 评分更高（${rateTxt(higherSide === "L" ? sa : sb)} vs ${rateTxt(higherSide === "L" ? sb : sa)}）`;
+    // 更新 HUD
+    const hud = $("#game-hud"); if (hud) hud.outerHTML = gameHUD();
+    // 短暂展示后进入下一题 / 结算
+    _game.busy = true;
+    setTimeout(() => {
+      _game.idx++;
+      if (isGameOver()) { endGame(_game.correct >= GAME.PASS); return; }
+      renderQuestion();
+    }, correct ? 900 : 1500);
+  }
+  function isGameOver() {
+    return _game.wrong >= GAME.MAX_WRONG || _game.correct >= GAME.PASS || _game.idx >= GAME.TOTAL;
+  }
+  function gameHUD() {
+    if (!_game) return "";
+    const hearts = Array.from({ length: GAME.MAX_WRONG }, (_, i) =>
+      `<span class="heart ${i < (GAME.MAX_WRONG - _game.wrong) ? "" : "lost"}">${i < (GAME.MAX_WRONG - _game.wrong) ? "❤" : "🤍"}</span>`).join("");
+    return `
+      <div class="game-hud" id="game-hud">
+        <div class="game-hud-item">第 <b>${Math.min(_game.idx + 1, GAME.TOTAL)}</b>/${GAME.TOTAL} 题</div>
+        <div class="game-hud-item">答对 <b class="good">${_game.correct}</b>/${GAME.PASS}</div>
+        <div class="game-hud-item game-lives">剩余错误 ${hearts}</div>
+      </div>`;
+  }
+  // 随机抽取一对（评分接近、评分人数≥MIN_VOTES）
+  async function pickPair(pool) {
+    const a = pool[(Math.random() * pool.length) | 0];
+    let b = pool[(Math.random() * pool.length) | 0], g = 0;
+    while ((b.id === a.id || (b.rating != null && a.rating != null && b.rating === a.rating)) && g++ < 12) b = pool[(Math.random() * pool.length) | 0];
+    const [ma, mb] = await Promise.all([fetchMeta(a), fetchMeta(b)]);
+    const sa = ma && ma.score != null ? ma.score : a.rating;
+    const sb = mb && mb.score != null ? mb.score : b.rating;
+    const ta = ma ? ma.total : null, tb = mb ? mb.total : null;
+    // 评分人数不足则换一部（仅当能确认人数时过滤；离线无法确认则放行）
+    if (ta != null && ta < GAME.MIN_VOTES) return null;
+    if (tb != null && tb < GAME.MIN_VOTES) return null;
+    if (sa === sb) return null;   // 平局重抽，保证有胜负
+    return { a, b, sa, sb, ma, mb, revealed: false };
+  }
+  function endGame(win) {
+    const root = $("#game-root"); if (!_game) return;
+    const total = _game.idx >= GAME.TOTAL ? GAME.TOTAL : _game.correct + _game.wrong;
+    root.innerHTML = `
+      <div class="game-end ${win ? "win" : "lose"}">
+        <div class="game-end-emoji">${win ? "🏆" : "💔"}</div>
+        <h2>${win ? "通关成功！" : (_game.wrong >= GAME.MAX_WRONG ? "错误次数用尽" : "挑战结束")}</h2>
+        <p class="game-end-stat">答对 <b>${_game.correct}</b> / ${GAME.TOTAL} 题 · 错误 <b>${_game.wrong}</b> 次</p>
+        <p class="game-end-sub">${win ? "你的番剧品味相当在线 🎉" : `再接再厉，答对 ${GAME.PASS} 题即可通关`}</p>
+        <div class="game-end-actions">
+          <button class="btn btn-primary" id="game-again">再来一局</button>
+          <button class="btn btn-ghost" id="game-back">调整设置</button>
+        </div>
+      </div>`;
+    $("#game-again").addEventListener("click", () => { _game.idx = 0; _game.correct = 0; _game.wrong = 0; renderQuestion(); });
+    $("#game-back").addEventListener("click", () => { _game = null; renderGameRoot(); });
   }
 
   /* ---------------- 放送时间表（按季度 · 自动跟随真实日期） ---------------- */
@@ -497,7 +677,7 @@
 
   /* ---------------- 点击波纹 (ripple-click) ---------------- */
   function bindRipple(root) {
-    $$(".anime-card, .rank-item", root).forEach(el => {
+    $$(".anime-card", root).forEach(el => {
       el.addEventListener("click", (e) => {
         const r = el.getBoundingClientRect();
         const rip = document.createElement("span");
@@ -652,7 +832,6 @@
     renderHome();
     renderCalendar();
     bindCalendarTabs();
-    renderRank();
     renderFilters();
     renderBrowse();
 
@@ -682,7 +861,6 @@
     }));
     // 移动端：hero 按钮跳转到浏览
     $$(".to-browse").forEach(b => b.addEventListener("click", (e) => { e.preventDefault(); showView("browse"); }));
-    $("#section-more-rank").addEventListener("click", (e) => { e.preventDefault(); showView("rank"); });
 
     // 移动端汉堡菜单：展开/收起 + 点链接自动收起 + 点外部关闭
     const navEl = document.querySelector("header.nav");
@@ -719,9 +897,7 @@
     $("#genre-chips").addEventListener("click", (e) => chipClick(e, "genre", "data-genre"));
     $("#status-chips").addEventListener("click", (e) => chipClick(e, "status", "data-status"));
 
-    // 排行点击（日历卡片已用内联 onclick，确保缓存旧脚本也能点开）
-    $("#rank-list").addEventListener("click", (e) => { const it = e.target.closest(".rank-item"); if (it) openModal(+it.dataset.id); });
-    $("#top5").addEventListener("click", (e) => { const it = e.target.closest(".rank-item"); if (it) openModal(+it.dataset.id); });
+    // 详情弹窗遮罩 / Esc 关闭（日历卡片已用内联 onclick，确保缓存旧脚本也能点开）
     $("#modal-mask").addEventListener("click", (e) => { if (e.target.id === "modal-mask") closeModal(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
