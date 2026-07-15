@@ -125,6 +125,27 @@
 
     // 首页卡片交互（本季轮播 / 编辑推荐）
     ["#featured-carousel", "#picks-grid"].forEach(sel => { bindTilt($(sel)); bindRipple($(sel)); });
+
+    renderCoverMarquee();
+  }
+
+  // 首页「热门番剧」封面滚动播放：从评分可靠的热门番剧里随机抽 5 张，无缝循环滚动
+  function renderCoverMarquee() {
+    const track = $("#cover-track"); if (!track) return;
+    const pool = DATA.filter(a => ratingReliable(a) && a.cover)
+      .sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 60);
+    if (!pool.length) { const m = $("#cover-marquee"); if (m) m.style.display = "none"; return; }
+    const copy = pool.slice(), pick = [];
+    for (let i = 0; i < 5 && copy.length; i++) pick.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
+    const cell = (a) => `<div class="cover-cell" data-id="${a.id}">
+        <div class="cover-img" style="background-image:url('${a.cover}')"></div>
+        <div class="cover-cap">${esc(a.title)}</div>
+      </div>`;
+    // 复制一份用于无缝循环（动画位移 -50%）
+    track.innerHTML = pick.map(cell).join("") + pick.map(cell).join("");
+    track.querySelectorAll(".cover-cell").forEach(c => c.onclick = () => {
+      if (window.openModal) openModal(parseInt(c.dataset.id, 10));
+    });
   }
 
   /* ================= 动画小游戏：猜动画评分 =================
@@ -444,12 +465,14 @@
   }
 
   /* ---------------- 浏览 / 筛选 ---------------- */
-  // 排序：rating=评分高→低(暂无评分置底) / date=放送时间(新→旧) / collect=追番人数(多→少)
-  const state = { sort: "rating", genre: "all", status: "all", q: "", mineFilter: "all" };
-  const SORTS = [["rating", "评分高→低"], ["date", "放送时间"], ["collect", "追番人数"]];
+  // 排序：rating=评分 / date=放送时间 / collect=追番人数；dir=asc|desc 控制正序/倒序
+  const state = { sort: "rating", dir: "desc", genre: "all", status: "all", q: "", mineFilter: "all" };
+  const SORTS = [["rating", "评分"], ["date", "放送时间"], ["collect", "追番人数"]];
   function renderFilters() {
     $("#season-chips").innerHTML = SORTS.map(([k, label], i) =>
       `<button class="f-chip${i === 0 ? " active" : ""}" data-sort="${k}">${label}</button>`).join("");
+    const dirBtn = $("#sort-dir");
+    if (dirBtn) dirBtn.textContent = state.dir === "asc" ? "↑ 升序" : "↓ 降序";
     const allGenres = Array.from(new Set(DATA.flatMap(a => a.genres || []))).sort();
     $("#genre-chips").innerHTML = `<button class="f-chip active" data-genre="all">全部</button>` +
       allGenres.map(g => `<button class="f-chip" data-genre="${esc(g)}">${esc(g)}</button>`).join("");
@@ -457,14 +480,15 @@
       `<button class="f-chip" data-status="连载中">连载中</button>` +
       `<button class="f-chip" data-status="已完结">已完结</button>`;
   }
-  // 排序函数（纯函数，不修改原数组）
+  // 排序函数（纯函数，不修改原数组）；dir 控制 升序/降序
   function sortBrowse(list) {
     const s = state.sort || "rating";
-    if (s === "date") return list.slice().sort((x, y) => (y.date || "").localeCompare(x.date || ""));
-    if (s === "collect") return list.slice().sort((x, y) =>
-      (y.collect_count || y.rating_count || 0) - (x.collect_count || x.rating_count || 0) ||
-      (y.rating || 0) - (x.rating || 0));
-    return list.slice().sort((x, y) => rateValue(y) - rateValue(x)); // 评分高→低，暂无评分置底
+    const mul = state.dir === "asc" ? 1 : -1;
+    const arr = list.slice();
+    if (s === "date") arr.sort((x, y) => mul * (y.date || "").localeCompare(x.date || ""));
+    else if (s === "collect") arr.sort((x, y) => mul * ((y.collect_count || y.rating_count || 0) - (x.collect_count || x.rating_count || 0) || (y.rating || 0) - (x.rating || 0)));
+    else arr.sort((x, y) => mul * (rateValue(y) - rateValue(x))); // 评分：暂无评分置底（升序时置顶）
+    return arr;
   }
   let _bList = [], _bShown = 0;
   const B_PAGE = 60;   // 每次渲染 60 张，避免一次性塞 1.5 万节点卡死
@@ -560,8 +584,8 @@
           <div class="m-fact"><div class="k">话数</div><div class="v">${ep}</div></div>
           <div class="m-fact"><div class="k">状态</div><div class="v">${val(a.status || "Bangumi")}</div></div>
           <div class="m-fact"><div class="k">首播</div><div class="v">${val(a.date)}</div></div>
-          <div class="m-fact"><div class="k">制作公司</div><div class="v">${val(a.studio)}</div></div>
-          <div class="m-fact"><div class="k">监督</div><div class="v">${val(a.director)}</div></div>
+          <div class="m-fact"><div class="k">制作公司</div><div class="v" id="m-studio">${val(a.studio)}</div></div>
+          <div class="m-fact"><div class="k">监督</div><div class="v" id="m-director">${val(a.director)}</div></div>
         </div>
         <div class="m-summary"><h4>剧情简介</h4>${a.summary ? esc(a.summary) : (loading ? "正在从 Bangumi 加载…" : "（暂无简介）")}</div>
         <div class="collect-box" id="collect-box"></div>
@@ -581,8 +605,19 @@
     refreshLiveRating(a);   // 详情打开时实时拉取 Bangumi 最新评分（拉不到则用烘焙值）
   }
 
-  // 评分实时刷新：客户端直连 Bangumi legacy 接口（免 token）。若浏览器被 CORS 拦截或断网，
-  // 静默回退到烘焙评分，绝不报错。
+  // 从 Bangumi staff 中提取 监督(导演) 与 制作公司(动画制作)
+  function extractStaff(d) {
+    const staff = (d && d.staff) || [];
+    let director = "", studio = "";
+    for (const s of staff) {
+      const jobs = s.jobs || [];
+      if (!director && jobs.some(j => j === "导演" || j === "监督")) director = s.name;
+      if (!studio && jobs.some(j => j === "动画制作" || j === "制作")) studio = s.name;
+    }
+    return { director, studio };
+  }
+  // 评分 / 制作阵容 实时刷新：客户端直连 Bangumi legacy 接口（免 token，responseGroup=large 含 staff）。
+  // 若浏览器被 CORS 拦截或断网，静默回退到烘焙值，绝不报错。
   function refreshLiveRating(a) {
     if (!a || !a.id) return;
     const el = $("#modal .modal-rate span");
@@ -593,9 +628,16 @@
       }
     };
     try {
-      fetch("https://api.bgm.tv/subject/" + a.id, { headers: { "Accept": "application/json" } })
+      fetch("https://api.bgm.tv/subject/" + a.id + "?responseGroup=large", { headers: { "Accept": "application/json" } })
         .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d && d.rating && d.rating.score != null) apply(d.rating.score); })
+        .then(d => {
+          if (d && d.rating && d.rating.score != null) apply(d.rating.score);
+          if (d && d.staff) {
+            const { director, studio } = extractStaff(d);
+            const sd = $("#m-studio"); if (sd && studio) sd.textContent = studio;
+            const dd = $("#m-director"); if (dd && director) dd.textContent = director;
+          }
+        })
         .catch(() => {});
     } catch (e) { /* 离线或被拦截：保持烘焙值 */ }
   }
@@ -863,12 +905,8 @@
 
   /* ---------------- Hero 统计数字 ---------------- */
   function heroStats() {
-    const rated = DATA.filter(a => a.rating != null);
-    const avg = rated.reduce((s, a) => s + a.rating, 0) / (rated.length || 1);
-    const high = DATA.filter(a => a.rating != null && a.rating >= 7).length;
+    // 仅保留「收录作品」计数（平均评分 / 高分番剧 已移除）
     countUp($("#stat-count"), DATA.length, 1400, 0);
-    countUp($("#stat-avg"), avg, 1400, 1);
-    countUp($("#stat-season"), high, 1400, 0);
   }
 
   /* ---------------- 暗色模式 ---------------- */
@@ -991,6 +1029,13 @@
       $$(".f-chip", $("#season-chips")).forEach(x => x.classList.remove("active"));
       b.classList.add("active");
       state.sort = b.dataset.sort;
+      renderBrowse();
+    });
+    // 排序方向：升序 / 降序 切换
+    const dirBtn = $("#sort-dir");
+    if (dirBtn) dirBtn.addEventListener("click", () => {
+      state.dir = state.dir === "asc" ? "desc" : "asc";
+      dirBtn.textContent = state.dir === "asc" ? "↑ 升序" : "↓ 降序";
       renderBrowse();
     });
     $("#genre-chips").addEventListener("click", (e) => chipClick(e, "genre", "data-genre"));
