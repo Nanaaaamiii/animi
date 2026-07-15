@@ -23,7 +23,18 @@
   };
   const bigChar = (a) => (a.jp && a.jp.trim()[0]) || (a.title && a.title[0]) || "★";
   const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const rateTxt = (r) => (r == null ? "—" : r.toFixed(1));
+  // 评分人数阈值：低于该值视为「暂无评分」（评分人数过少的番评分不可信）
+  const RATING_MIN_VOTES = 70;
+  // 评分人数充足性：true=可信；false=暂无评分（排序置底 / 详情显示「暂无」）
+  const ratingReliable = (a) => a && a.rating_count != null && a.rating_count >= RATING_MIN_VOTES;
+  // 用于排序的评分值：暂无评分→ -1（最低）；否则取烘焙评分
+  const rateValue = (a) => ratingReliable(a) ? (a.rating != null ? a.rating : -1) : -1;
+  // 评分文案：暂无评分 / 普通分数
+  const rateText = (a) => {
+    if (!ratingReliable(a)) return "暂无";
+    return (a.rating == null || a.rating <= 0) ? "暂无" : a.rating.toFixed(1);
+  };
+  const rateTxt = (r) => (r == null ? "—" : r.toFixed(1)); // 兼容旧调用（仅纯数值）
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -47,7 +58,7 @@
         <div class="title">${esc(a.title)}</div>
         <div class="sub">${a.date} · ${a.status}</div>
         <div class="row">
-          <span class="rate">${star}${rateTxt(a.rating)}</span>
+          <span class="rate">${star}${rateText(a)}</span>
           <div class="chip-row"><span class="chip">${(a.genres && a.genres[0]) || a.season || "—"}</span></div>
         </div>
       </div>
@@ -74,15 +85,28 @@
   }
 
   /* ---------------- 首页 ---------------- */
+  // 当前季度（年 + 季）：用于「本季新番」展示本季度最热门番剧
+  function currentQuarter() {
+    const now = new Date();
+    const m = now.getMonth() + 1;
+    const s = m <= 2 ? "冬" : m <= 5 ? "春" : m <= 8 ? "夏" : "秋";
+    return { year: now.getFullYear(), season: s };
+  }
   function renderHome() {
-    // 本季新番（2024 各季）作横向轮播
-    const featured = DATA.filter(a => a.year >= 2024).sort((x, y) => y.rating - x.rating);
+    // 本季新番 → 本季度最热门番剧（按 评分人数/追番人数 回退到评分排序）
+    const q = currentQuarter();
+    let featured = DATA.filter(a => a.year === q.year && (a.season || "") === q.season);
+    if (!featured.length) featured = DATA.filter(a => a.year >= q.year - 1); // 数据未覆盖本季时回退近一年
+    featured = featured.sort((x, y) =>
+      (y.rating_count || y.collect_count || 0) - (x.rating_count || x.collect_count || 0) ||
+      (y.rating || 0) - (x.rating || 0)
+    ).slice(0, 24);
     $("#featured-track").innerHTML = featured.map(a => cardHTML(a)).join("");
     enableDragScroll($("#featured-carousel"));
 
-    // 编辑推荐
-    const picks = [...DATA].sort((x, y) => y.rating - x.rating).slice(0, 8);
-    $("#picks-grid").innerHTML = picks.map(a => cardHTML(a)).join("");
+    // 站长推荐（由社区模块从 recommendations 表拉取；仅站长/管理员可编辑）
+    if (window.Community) Community.renderOwnerPicks($("#picks-grid"));
+    else $("#picks-grid").innerHTML = `<div class="cal-empty" style="grid-column:1/-1;padding:40px">站长推荐模块加载中…</div>`;
 
     // 动画小游戏入口卡
     const promo = [
@@ -420,10 +444,12 @@
   }
 
   /* ---------------- 浏览 / 筛选 ---------------- */
-  const state = { rating: "all", genre: "all", status: "all", q: "", mineFilter: "all" };
+  // 排序：rating=评分高→低(暂无评分置底) / date=放送时间(新→旧) / collect=追番人数(多→少)
+  const state = { sort: "rating", genre: "all", status: "all", q: "", mineFilter: "all" };
+  const SORTS = [["rating", "评分高→低"], ["date", "放送时间"], ["collect", "追番人数"]];
   function renderFilters() {
-    $("#season-chips").innerHTML = `<button class="f-chip active" data-rating="all">全部</button>` +
-      ["8", "7", "6"].map(r => `<button class="f-chip" data-rating="${r}">${r}★+</button>`).join("");
+    $("#season-chips").innerHTML = SORTS.map(([k, label], i) =>
+      `<button class="f-chip${i === 0 ? " active" : ""}" data-sort="${k}">${label}</button>`).join("");
     const allGenres = Array.from(new Set(DATA.flatMap(a => a.genres || []))).sort();
     $("#genre-chips").innerHTML = `<button class="f-chip active" data-genre="all">全部</button>` +
       allGenres.map(g => `<button class="f-chip" data-genre="${esc(g)}">${esc(g)}</button>`).join("");
@@ -431,11 +457,19 @@
       `<button class="f-chip" data-status="连载中">连载中</button>` +
       `<button class="f-chip" data-status="已完结">已完结</button>`;
   }
+  // 排序函数（纯函数，不修改原数组）
+  function sortBrowse(list) {
+    const s = state.sort || "rating";
+    if (s === "date") return list.slice().sort((x, y) => (y.date || "").localeCompare(x.date || ""));
+    if (s === "collect") return list.slice().sort((x, y) =>
+      (y.collect_count || y.rating_count || 0) - (x.collect_count || x.rating_count || 0) ||
+      (y.rating || 0) - (x.rating || 0));
+    return list.slice().sort((x, y) => rateValue(y) - rateValue(x)); // 评分高→低，暂无评分置底
+  }
   let _bList = [], _bShown = 0;
   const B_PAGE = 60;   // 每次渲染 60 张，避免一次性塞 1.5 万节点卡死
   function renderBrowse() {
-    _bList = DATA.filter(a => {
-      if (state.rating !== "all" && !(a.rating != null && a.rating >= +state.rating)) return false;
+    _bList = sortBrowse(DATA.filter(a => {
       if (state.genre !== "all" && !(a.genres || []).includes(state.genre)) return false;
       if (state.status !== "all" && a.status !== state.status) return false;
       if (state.q) {
@@ -444,7 +478,7 @@
         if (!hit) return false;
       }
       return true;
-    }).sort((x, y) => (y.rating || 0) - (x.rating || 0));
+    }));
     _bShown = 0;
     const g = $("#browse-grid");
     $("#browse-count").textContent = `共 ${_bList.length} 部`;
@@ -470,6 +504,39 @@
     if (mb) mb.textContent = `加载更多（${_bShown} / ${_bList.length}）`;
   }
 
+  /* ---------------- 用户搜索下拉（昵称 / UID） ---------------- */
+  function closeUserSearch() { const b = $("#user-search"); if (b) b.hidden = true; }
+  function renderUserSearch(rows, q) {
+    const box = $("#user-search"); if (!box) return;
+    if (!rows || !rows.length) { box.hidden = true; return; }
+    const av = (u) => u.avatar_url
+      ? `<img class="us-av" src="${esc(u.avatar_url)}" alt="">`
+      : `<span class="us-av" style="background:${cover(u.id)}">${esc((u.username || "U")[0] || "U")}</span>`;
+    box.innerHTML = `<div class="us-head">用户 · 昵称 / UID 匹配「${esc(q)}」共 ${rows.length} 位</div>` +
+      rows.map(u => `
+        <div class="us-row" data-uid="${u.id}">
+          ${av(u)}
+          <div class="us-meta">
+            <div class="us-name">${esc(u.username)}${u.role ? `<span class="role-badge role-owner">${esc(u.role)}</span>` : ""}${u.uid != null ? `<span class="c-uid">UID:${u.uid}</span>` : ""}</div>
+          </div>
+          ${u.isSelf ? "" : (u.following ? `<button class="us-follow following" data-act="unfollow">已关注</button>` : `<button class="us-follow" data-act="follow">＋ 关注</button>`)}
+        </div>`).join("");
+    box.hidden = false;
+    box.querySelectorAll(".us-row").forEach(r => r.onclick = (e) => {
+      if (e.target.closest(".us-follow")) return;
+      const id = r.dataset.uid;
+      closeUserSearch();
+      if (window.Community) Community.openProfile(id);
+    });
+    box.querySelectorAll(".us-follow").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      const id = b.closest(".us-row").dataset.uid;
+      if (!window.Community) return;
+      await Community.toggleFollow(id);
+      Community.searchUsers(q, (rs) => renderUserSearch(rs, q));
+    });
+  }
+
   /* ---------------- 详情弹窗（支持本地 + Bangumi 实时） ---------------- */
   function renderModalShell(a, loading) {
     const tags = (a.genres && a.genres.length)
@@ -486,7 +553,7 @@
       <div class="modal-body">
         <div class="m-title">${esc(a.title)}</div>
         <div class="m-jp">${esc(a.jp)}${a.en ? " · " + esc(a.en) : ""}</div>
-        <div class="modal-rate">${star}<span data-count="0">${loading ? "…" : rateTxt(a.rating)}</span></div>
+        <div class="modal-rate">${star}<span data-count="0">${loading ? "…" : rateText(a)}</span></div>
         <div class="m-tags">${tags}</div>
         <div class="m-facts">
           <div class="m-fact"><div class="k">放送季度</div><div class="v">${val(a.year ? a.year + " " + (a.season || "") + "季" : "")}</div></div>
@@ -838,6 +905,8 @@
     bindTheme();
     // 注入图标
     $(".search-box").insertAdjacentHTML("afterbegin", iconSearch);
+    // 把卡片渲染函数交给社区模块，使「站长推荐」与动画库卡片样式一致
+    if (window.Community) Community.cardHTML = cardHTML;
     renderHome();
     renderCalendar();
     bindCalendarTabs();
@@ -880,12 +949,27 @@
       document.addEventListener("click", (e) => { if (navEl.classList.contains("open") && !navEl.contains(e.target)) navEl.classList.remove("open"); });
     }
 
-    // 搜索（本地库快速筛选）
+    // 搜索（本地库快速筛选动画）+ 用户搜索下拉（昵称 / UID）
     const search = $("#global-search");
+    let _usTimer = null;
     search.addEventListener("input", () => {
-      state.q = search.value.trim();
+      const q = search.value.trim();
+      state.q = q;
       showView("browse");
       renderBrowse();
+      clearTimeout(_usTimer);
+      _usTimer = setTimeout(() => {
+        if (window.Community && q) Community.searchUsers(q, (rows) => renderUserSearch(rows, q));
+        else closeUserSearch();
+      }, 250);
+    });
+    search.addEventListener("focus", () => {
+      const q = search.value.trim();
+      if (q && window.Community) Community.searchUsers(q, (rows) => renderUserSearch(rows, q));
+    });
+    // 点击搜索框 / 下拉以外的区域关闭用户下拉
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".search-box") && !e.target.closest("#user-search")) closeUserSearch();
     });
 
     // 动画库说明
@@ -901,8 +985,14 @@
       if (window.Community) Community.renderMine();
     });
 
-    // 筛选交互
-    $("#season-chips").addEventListener("click", (e) => chipClick(e, "rating", "data-rating"));
+    // 排序交互（取代原「8★+」评分筛选）
+    $("#season-chips").addEventListener("click", (e) => {
+      const b = e.target.closest(".f-chip"); if (!b) return;
+      $$(".f-chip", $("#season-chips")).forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      state.sort = b.dataset.sort;
+      renderBrowse();
+    });
     $("#genre-chips").addEventListener("click", (e) => chipClick(e, "genre", "data-genre"));
     $("#status-chips").addEventListener("click", (e) => chipClick(e, "status", "data-status"));
 
