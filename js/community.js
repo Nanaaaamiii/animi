@@ -42,6 +42,13 @@
     return `<span class="${cls}" style="background:${grad(id || 0)}">${esc(nm[0] || "U")}</span>`;
   };
   const uidTag = (profile) => (profile && profile.uid != null) ? `<span class="c-uid">UID:${profile.uid}</span>` : "";
+  // 用户称号（如「站长」），数据来自 profiles.role
+  const ROLE_CLASS = { "站长": "role-owner", "管理员": "role-admin", "编辑": "role-editor" };
+  const roleTag = (profile) => {
+    if (!profile || !profile.role) return "";
+    const cls = ROLE_CLASS[profile.role] || "role-custom";
+    return `<span class="role-badge ${cls}">${esc(profile.role)}</span>`;
+  };
   const timeAgo = (t) => {
     const d = (Date.now() - new Date(t).getTime()) / 1000;
     if (d < 60) return "刚刚"; if (d < 3600) return Math.floor(d / 60) + "分钟前";
@@ -243,7 +250,7 @@
             <div class="avatar-hint">建议方形图片，小于 2MB</div>
           </div>
         </div>
-        <div class="uid-line">UID：<b>${p.uid != null ? p.uid : "—"}</b></div>
+        <div class="uid-line">UID：<b>${p.uid != null ? p.uid : "—"}</b>${roleTag(p)}</div>
         <div class="lv-line">
           <span class="lv-badge">${li.max ? "Lv" + li.lv + " · 满级" : "Lv" + li.lv}</span>
           <span class="lv-exp">${li.max ? "EXP " + li.exp : "EXP " + li.exp + " / " + li.next}</span>
@@ -336,7 +343,7 @@
         <div class="post-main">
           <div class="post-title">${esc(p.title)}</div>
           <div class="post-body">${esc(p.body)}</div>
-          <div class="post-meta"><span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span><span>@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
+          <div class="post-meta"><span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span><span>@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${roleTag(names[p.user_id])}${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
         </div>
       </div>`).join("");
     $$(".post-card", wrap).forEach(c => c.onclick = () => openPost(c.dataset.id));
@@ -344,7 +351,7 @@
 
   async function fetchNames(ids) {
     if (!ids.length) return {};
-    const { data } = await sb.from("profiles").select("id,username,avatar_url,uid").in("id", ids);
+    const { data } = await sb.from("profiles").select("id,username,avatar_url,uid,role").in("id", ids);
     const m = {}; (data || []).forEach(u => m[u.id] = u); return m;
   }
 
@@ -364,7 +371,7 @@
       <div class="comm-post">
         <div class="post-title">${esc(post.title)}</div>
         <div class="post-body" style="white-space:pre-wrap">${esc(post.body)}</div>
-        <div class="post-meta"><span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span><span>@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
+        <div class="post-meta"><span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span><span>@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${roleTag(names[post.user_id])}${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
       </div>
       <div class="comm-divider">评论 ${comments ? comments.length : 0}</div>
       <div id="comment-list" class="comment-list">${comments && comments.length ? comments.map(c => commentHTML(c, names[c.user_id])).join("") : `<div class="empty">还没有评论</div>`}</div>
@@ -438,7 +445,7 @@
     const name = (profile && profile.username) || "用户";
     const replies = (c._replies || []).map(r => commentHTML(r, profile, depth + 1)).join("");
     return `<div class="comment-item${mine ? " mine" : ""}${depth ? " reply" : ""}">
-      <div class="c-head"><span class="c-av">${avatarHTML(profile, c.user_id, "xs")}</span><span class="c-name">@${esc(name)}</span>${uidTag(profile)}<span class="c-time">${timeAgo(c.created_at)}</span>${mine ? `<button class="c-del" data-id="${c.id}">删除</button>` : ""}</div>
+      <div class="c-head"><span class="c-av">${avatarHTML(profile, c.user_id, "xs")}</span><span class="c-name">@${esc(name)}</span>${roleTag(profile)}${uidTag(profile)}<span class="c-time">${timeAgo(c.created_at)}</span>${mine ? `<button class="c-del" data-id="${c.id}">删除</button>` : ""}</div>
       ${c.body ? `<div class="c-body">${esc(c.body)}</div>` : ""}
       ${imagesHTML(c.images)}
       <div class="c-actions"><button class="c-reply" data-id="${c.id}" data-name="${esc(name)}">回复</button></div>
@@ -617,7 +624,7 @@
       const rt = ratings[c.anime_id];
       const stars = rt ? "★".repeat(rt) + "☆".repeat(10 - rt) : "";
       return `<div class="review-card" data-anime="${c.anime_id}">
-        <div class="rv-head"><span class="c-av">${avatarHTML(prof, c.user_id, "xs")}</span><span class="rv-name">@${esc(name)}</span>${uidTag(prof)}<span class="c-time">${timeAgo(c.created_at)}</span></div>
+        <div class="rv-head"><span class="c-av">${avatarHTML(prof, c.user_id, "xs")}</span><span class="rv-name">@${esc(name)}</span>${roleTag(prof)}${uidTag(prof)}<span class="c-time">${timeAgo(c.created_at)}</span></div>
         <div class="rv-anime">📺 ${esc(a ? a.title : "未知番剧")}</div>
         ${rt ? `<div class="rv-score">我的评分：<b style="color:#ffce3d">${stars}</b> ${rt}/10</div>` : ""}
         ${c.body ? `<div class="rv-body">${esc(c.body)}</div>` : ""}
