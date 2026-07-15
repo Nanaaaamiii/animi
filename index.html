@@ -23,7 +23,7 @@
         <a href="#" data-view="home" class="active">首页</a>
         <a href="#" data-view="calendar">放送时间表</a>
         <a href="#" data-view="browse">动画库</a>
-        <a href="#" data-view="rank">排行榜</a>
+        <a href="#" data-view="game">动画小游戏</a>
         <a href="#" data-view="community">社区</a>
         <a href="#" data-view="mine">我的</a>
       </nav>
@@ -88,16 +88,16 @@
         <div class="card-grid reveal" id="picks-grid"></div>
       </div>
 
-      <!-- 人气预览 -->
+      <!-- 动画小游戏入口 -->
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>人气排行榜</div>
-            <div class="section-desc">综合评分 Top 5</div>
+            <div class="section-title"><span class="bar"></span>动画小游戏</div>
+            <div class="section-desc">考验你对番剧评分的直觉</div>
           </div>
-          <a href="#" class="section-more" id="section-more-rank">完整榜单 →</a>
+          <a href="#" class="section-more" data-view="game">开始挑战 →</a>
         </div>
-        <div class="rank-list" id="top5"></div>
+        <div class="game-promo" id="game-promo"></div>
       </div>
     </section>
 
@@ -150,16 +150,16 @@
       </div>
     </section>
 
-    <!-- ============ 排行榜 ============ -->
-    <section id="view-rank" class="hidden">
+    <!-- ============ 动画小游戏 ============ -->
+    <section id="view-game" class="hidden">
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>综合评分排行榜</div>
-            <div class="section-desc">基于用户评分排序 · Top 20</div>
+            <div class="section-title"><span class="bar"></span>动画小游戏</div>
+            <div class="section-desc">从动画库随机抽取两部，猜猜谁评分更高</div>
           </div>
         </div>
-        <div class="rank-list reveal" id="rank-list"></div>
+        <div id="game-root"></div>
       </div>
     </section>
 
@@ -246,7 +246,7 @@
           <a href="#" data-view="home">首页</a>
           <a href="#" data-view="calendar">放送时间表</a>
           <a href="#" data-view="browse">动画库</a>
-          <a href="#" data-view="rank">排行榜</a>
+          <a href="#" data-view="game">动画小游戏</a>
           <a href="#" data-view="community">社区</a>
         </div>
         <div class="foot-col">
