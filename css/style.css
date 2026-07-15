@@ -260,6 +260,12 @@ header.nav {
 .carousel.dragging .anime-card { pointer-events: none; }
 
 /* ---------- 每周放送表 (calendar) ---------- */
+/* 栏目切换：每周 / 每季度 */
+.cal-tabs { display: flex; gap: 8px; margin: 4px 0 14px; }
+.cal-tab { padding: 9px 20px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer; transition: all .2s; }
+.cal-tab:hover { border-color: var(--primary); }
+.cal-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; box-shadow: 0 6px 18px var(--primary-soft); }
+@media (max-width: 720px) { .cal-tab { padding: 8px 14px; font-size: 13px; } }
 /* 季度切换器 */
 .cal-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 6px 0 18px; }
 .cal-nav-btn { padding: 8px 18px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 700; cursor: pointer; transition: border-color .2s, color .2s, transform .1s; }
