@@ -1268,6 +1268,8 @@
     try {
       sb.channel("forum-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "forum_comments" }, () => { if (currentPostId) openPost(currentPostId); }).subscribe();
       sb.channel("anime-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "anime_comments" }, (p) => { if (currentAnimeId && p.new.anime_id === currentAnimeId) openAnimeDiscussion(currentAnimeId); }).subscribe();
+      // 公告栏变更（编辑内容 / 拖动布局）→ 所有访客实时同步
+      sb.channel("ann-c").on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => { renderAnnouncement(document.getElementById("announce-panel")); }).subscribe();
       // 私信：只监听「发给我的新消息」→ 刷新红点（RLS 保证仅接收方可见）
       if (USER) {
         sb.channel("dm-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${USER.id}` }, () => { refreshMsgDot(); }).subscribe();
@@ -1510,18 +1512,26 @@
   }
 
   /* ---------------- 首页公告栏 ---------------- */
+  // 公告栏布局状态：位置/大小存 Supabase（所有访客共享同一布局），本机 localStorage 仅作兜底
+  let ANN_CURRENT_ID = null;
+  let ANN_LAYOUT = null;
   // 渲染首页右侧公告栏：拉取最新启用的公告，站长/管理员显示编辑按钮
   function renderAnnouncement(panel) {
     if (!panel || !sb) { panel.innerHTML = '<div class="announce-empty">暂无公告</div>'; return; }
     // 先清空 loading
     panel.innerHTML = "";
     sb.from("announcements").select("*").eq("is_active", true).order("updated_at", { ascending: false }).limit(1)
-      .maybeSingle().then(async row => {
+      .maybeSingle().then(async ({ data: row }) => {
         if (!row) {
+          ANN_CURRENT_ID = null; ANN_LAYOUT = null;
           panel.innerHTML = `<div class="announce-card"><div class="ac-head"><span class="ac-title">📢 公告</span></div>
             <div class="ac-body">暂无公告</div>${isAdmin() ? '<button class="ac-edit-btn" id="ac-edit-btn">编辑</button>' : ''}</div>`;
           bindAcEdit(); return;
         }
+        // 记录当前公告 id 与布局（供拖动/缩放持久化到 Supabase）
+        ANN_CURRENT_ID = row.id;
+        ANN_LAYOUT = (row.pos_x != null || row.pos_y != null || row.width != null || row.height != null)
+          ? { left: row.pos_x, top: row.pos_y, width: row.width, height: row.height } : null;
         let imgHtml = "";
         if (row.image_url) {
           imgHtml = `<img class="ac-img" src="${row.image_url}" alt="公告图片" onclick="if(window.__cbLightbox)__cbLightbox('${row.image_url}')" />`;
@@ -1534,6 +1544,7 @@
           <div class="ac-time">${timeStr}</div>
         </div>`;
         bindAcEdit();
+        applyAnnounceLayout(panel); // 应用数据库中的布局（所有访客一致）
       }).catch(() => {
         panel.innerHTML = '<div class="announce-empty">加载失败，请刷新重试</div>';
       });
@@ -1591,7 +1602,7 @@
     // 异步拉取已有公告回填（不影响弹窗已显示）
     if (sb) {
       sb.from("announcements").select("*").eq("is_active", true).order("updated_at", { ascending: false }).limit(1).maybeSingle()
-        .then(r => {
+        .then(({ data: r }) => {
           if (r) {
             const t = document.getElementById("ann-text"); if (t && r.content) t.value = r.content;
             if (r.image_url) { preview.src = r.image_url; preview.style.display = "block"; rmBtn.style.display = "inline-block"; }
@@ -1644,37 +1655,53 @@
     }
   }
 
-  /* ---------------- 公告栏布局：拖动 / 缩放 / 持久化（仅站长/管理员） ---------------- */
-  const ANN_LAYOUT_KEY = "announce_layout";
-  // 存相对 offsetParent 的偏移（而非视口坐标），滚动后也不会错位
-  function saveAnnounceLayout(panel) {
-    try {
-      const r = panel.getBoundingClientRect();
-      const p = panel.offsetParent ? panel.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
-      localStorage.setItem(ANN_LAYOUT_KEY, JSON.stringify({
-        left: r.left - p.left, top: r.top - p.top, width: r.width, height: r.height
-      }));
-    } catch (e) { /* 忽略 */ }
-  }
+  /* ---------------- 公告栏布局：拖动 / 缩放 / 持久化（仅站长/管理员，存 Supabase） ---------------- */
+  const ANN_LAYOUT_KEY = "announce_layout"; // 本机兜底
+  // 应用布局：优先用数据库中的 ANN_LAYOUT（所有访客一致），其次本机 localStorage 兜底
   function applyAnnounceLayout(panel) {
-    try {
-      const raw = localStorage.getItem(ANN_LAYOUT_KEY);
-      if (!raw) return;
-      const d = JSON.parse(raw);
-      panel.style.right = "auto";
-      panel.style.left = d.left + "px";
-      panel.style.top = d.top + "px";
-      panel.style.width = d.width + "px";
-      panel.style.height = d.height + "px";
-    } catch (e) { /* 忽略 */ }
+    if (!panel) return;
+    let d = (ANN_LAYOUT && ANN_LAYOUT.left != null && ANN_LAYOUT.top != null && ANN_LAYOUT.width != null && ANN_LAYOUT.height != null)
+      ? ANN_LAYOUT
+      : (() => { try { const raw = localStorage.getItem(ANN_LAYOUT_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } })();
+    if (!d || d.left == null || d.top == null || d.width == null || d.height == null) return;
+    panel.style.right = "auto";
+    panel.style.left = d.left + "px";
+    panel.style.top = d.top + "px";
+    panel.style.width = d.width + "px";
+    panel.style.height = d.height + "px";
   }
-  function resetAnnounceLayout(panel) {
+  // 保存布局到 Supabase（写当前公告行）+ 本机兜底；仅站长/管理员可写
+  async function saveAnnounceLayout(panel) {
+    if (!panel || !isAdmin() || !sb) return;
+    const r = panel.getBoundingClientRect();
+    const p = panel.offsetParent ? panel.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
+    const layout = {
+      pos_x: Math.round(r.left - p.left),
+      pos_y: Math.round(r.top - p.top),
+      width: Math.round(r.width),
+      height: Math.round(r.height)
+    };
+    ANN_LAYOUT = { left: layout.pos_x, top: layout.pos_y, width: layout.width, height: layout.height };
+    try { localStorage.setItem(ANN_LAYOUT_KEY, JSON.stringify(ANN_LAYOUT)); } catch (e) {}
+    if (ANN_CURRENT_ID) {
+      try { await sb.from("announcements").update(layout).eq("id", ANN_CURRENT_ID); }
+      catch (e) { console.warn("保存公告布局失败", e); }
+    }
+  }
+  // 重置为默认位置/大小（并清空数据库中的布局）
+  async function resetAnnounceLayout(panel) {
+    if (!panel) return;
+    ANN_LAYOUT = null;
     try { localStorage.removeItem(ANN_LAYOUT_KEY); } catch (e) {}
     panel.style.right = "4%";
     panel.style.left = "auto";
     panel.style.top = "84px";
     panel.style.width = "260px";
     panel.style.height = "380px";
+    if (isAdmin() && sb && ANN_CURRENT_ID) {
+      try { await sb.from("announcements").update({ pos_x: null, pos_y: null, width: null, height: null }).eq("id", ANN_CURRENT_ID); }
+      catch (e) { console.warn("重置公告布局失败", e); }
+    }
   }
   // 仅在面板拖动/缩放结束后保存，避免高频写入
   let _annLayoutT = null;
