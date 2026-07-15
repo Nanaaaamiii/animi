@@ -1545,12 +1545,9 @@
   }
 
   // 打开公告编辑弹窗（仅管理员/站长可调用）
-  async function openAnnouncementEditor() {
-    if (!isAdmin()) return;
-    const existing = await sb.from("announcements").select("*").eq("is_active", true).order("updated_at", { ascending: false }).limit(1).maybeSingle().catch(() => null);
-    const content = existing ? (existing.content || "") : "";
-    const imgUrl = existing ? (existing.image_url || "") : "";
-
+  // 关键：先同步创建并弹出弹窗，确保点击必有反应，再异步拉取已有内容回填。
+  function openAnnouncementEditor() {
+    if (!isAdmin()) { toast("仅站长/管理员可编辑公告"); return; }
     const overlay = document.createElement("div");
     overlay.className = "ann-editor-overlay";
     overlay.id = "ann-ov";
@@ -1559,13 +1556,13 @@
       <div class="ann-editor" onclick="event.stopPropagation()">
         <h3>📢 编辑公告</h3>
         <label>公告内容（支持文字）</label>
-        <textarea id="ann-text" placeholder="输入公告内容…">${esc(content)}</textarea>
+        <textarea id="ann-text" placeholder="输入公告内容…"></textarea>
         <label>公告图片（选填）</label>
         <div class="ann-img-row">
           <input type="file" id="ann-file" accept="image/*" />
-          ${imgUrl ? `<button type="button" class="btn btn-ghost" id="ann-rm-img" style="font-size:12px;padding:4px 8px;">删除图片</button>` : ""}
+          <button type="button" class="btn btn-ghost" id="ann-rm-img" style="font-size:12px;padding:4px 8px;display:none;">删除图片</button>
         </div>
-        ${imgUrl ? `<img class="ann-img-preview" id="ann-preview" src="${imgUrl}" style="display:block" />` : '<img class="ann-img-preview" id="ann-preview" />'}
+        <img class="ann-img-preview" id="ann-preview" style="display:none" />
         <div class="ann-actions">
           <button class="btn btn-ghost" id="ann-cancel">取消</button>
           <button class="btn btn-primary" id="ann-save">保存公告</button>
@@ -1573,20 +1570,30 @@
       </div>`;
     document.body.appendChild(overlay);
 
-    // 图片预览
     const fileInput = document.getElementById("ann-file");
     const preview = document.getElementById("ann-preview");
+    const rmBtn = document.getElementById("ann-rm-img");
     fileInput.onchange = () => {
       if (fileInput.files[0]) {
         preview.src = URL.createObjectURL(fileInput.files[0]);
         preview.style.display = "block";
+        rmBtn.style.display = "inline-block";
       }
     };
-    const rmBtn = document.getElementById("ann-rm-img");
-    if (rmBtn) rmBtn.onclick = () => { preview.src = ""; preview.style.display = "none"; fileInput.value = ""; };
-
+    rmBtn.onclick = () => { preview.src = ""; preview.style.display = "none"; fileInput.value = ""; rmBtn.style.display = "none"; };
     document.getElementById("ann-cancel").onclick = closeAnnEditor;
-    document.getElementById("ann-save").onclick = () => saveAnnouncement(existing);
+    document.getElementById("ann-save").onclick = saveAnnouncement;
+
+    // 异步拉取已有公告回填（不影响弹窗已显示）
+    if (sb) {
+      sb.from("announcements").select("*").eq("is_active", true).order("updated_at", { ascending: false }).limit(1).maybeSingle()
+        .then(r => {
+          if (r) {
+            const t = document.getElementById("ann-text"); if (t && r.content) t.value = r.content;
+            if (r.image_url) { preview.src = r.image_url; preview.style.display = "block"; rmBtn.style.display = "inline-block"; }
+          }
+        }).catch(() => {});
+    }
   }
 
   // 关闭编辑器
@@ -1595,39 +1602,29 @@
     if (ov) ov.remove();
   }
 
-  // 保存公告
-  async function saveAnnouncement(existing) {
+  // 保存公告（自动判断新增/更新：取最新一条启用公告，有则 update，无则 insert）
+  async function saveAnnouncement() {
     const textEl = document.getElementById("ann-text");
     const fileEl = document.getElementById("ann-file");
     const preview = document.getElementById("ann-preview");
     const saveBtn = document.getElementById("ann-save");
 
-    let imgUrl = existing ? (existing.image_url || "") : "";
+    // 当前图片 URL：原图仍显示（非 blob）→ 沿用；用户选了新图 → 上传后覆盖
+    let imgUrl = (preview.style.display !== "none" && preview.src && !preview.src.startsWith("blob:")) ? preview.src : "";
 
-    // 如果有新图片，先上传
     if (fileEl && fileEl.files[0]) {
       saveBtn.textContent = "上传中…"; saveBtn.disabled = true;
       try {
         imgUrl = await uploadCommentImage(fileEl.files[0]);
       } catch (e) { toast("图片上传失败：" + (e.message || e)); saveBtn.textContent = "保存公告"; saveBtn.disabled = false; return; }
-    } else if (preview && (!preview.src || preview.src.startsWith("blob:"))) {
-      // 用户选了图但还没确认上传，或原图被删了
-      // 如果有 blob URL 说明用户选了新图但 uploadCommentImage 没走通
-      if (!existing || !existing.image_url) imgUrl = "";
-    }
-    // 检查是否有"删除图片"操作：如果 rm 按钮被点了且没有新图
-    const rmBtn = document.getElementById("ann-rm-img");
-    if (!rmBtn && !fileEl?.files[0] && preview && !preview.src) {
-      imgUrl = ""; // 原图被删除且没上传新的
     }
 
     const bodyText = textEl.value.trim();
-
     saveBtn.textContent = "保存中…";
     try {
-      if (existing && existing.id) {
-        await sb.from("announcements").update({ content: bodyText, image_url: imgUrl, updated_at: new Date().toISOString() })
-          .eq("id", existing.id);
+      const { data: cur } = await sb.from("announcements").select("id").eq("is_active", true).order("updated_at", { ascending: false }).limit(1).maybeSingle();
+      if (cur && cur.id) {
+        await sb.from("announcements").update({ content: bodyText, image_url: imgUrl, updated_at: new Date().toISOString() }).eq("id", cur.id);
       } else {
         await sb.from("announcements").insert({
           content: bodyText, image_url: imgUrl, is_active: true,
