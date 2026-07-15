@@ -146,7 +146,7 @@
     const opt = (y, sel) => `<option value="${y}" ${y === sel ? "selected" : ""}>${y}</option>`;
     root.innerHTML = `
       <div class="game-card-setup">
-        <p class="game-lead">凭直觉猜猜看：下面两部番，<b>哪一部评分更高</b>？答对 ${GAME.PASS} / ${GAME.TOTAL} 题即可通关，答错 ${GAME.MAX_WRONG} 次游戏结束。可选对比年份区间。</p>
+        <p class="game-lead">从动画库随机抽取两部番剧，凭直觉猜出谁评分更高。先选择要对比的年份区间：</p>
         <div class="game-setup-row">
           <label class="game-field">
             <span>起始年份</span>
@@ -177,14 +177,18 @@
     if (isGameOver()) return;
     const seq = _gameSeq;
     _game.busy = true;
-    root.innerHTML = gameHUD() + `
+    root.innerHTML = `
+      <div class="game-play-head">
+        <p class="game-play-rules">凭直觉猜猜看：下面两部番，<b>哪一部评分更高</b>？答对 ${GAME.PASS} / ${GAME.TOTAL} 题即可通关，答错 ${GAME.MAX_WRONG} 次游戏结束。</p>
+      </div>
+      ${gameHUD()}
       <div class="game-arena" id="game-arena">
         <div class="game-load">准备题目中…</div>
       </div>`;
     let pair = null;
     for (let i = 0; i < 50 && !pair; i++) pair = await pickPair(_game.pool);
     if (seq !== _gameSeq) return;   // 已切换视图/重开，丢弃本次结果
-    if (!pair) { root.innerHTML = gameHUD() + `<div class="game-end"><h2>没有符合条件的番剧 😢</h2><button class="btn btn-ghost" onclick="if(window.renderGameRoot)renderGameRoot()">返回</button></div>`; return; }
+    if (!pair) { root.innerHTML = `<div class="game-play-head"><p class="game-play-rules">凭直觉猜猜看：下面两部番，<b>哪一部评分更高</b>？</p></div>` + gameHUD() + `<div class="game-end"><h2>没有符合条件的番剧 😢</h2><button class="btn btn-ghost" onclick="if(window.renderGameRoot)renderGameRoot()">返回</button></div>`; return; }
     _game.pair = pair; _game.busy = false;
     const arena = $("#game-arena");
     arena.innerHTML = `
@@ -354,13 +358,13 @@
         nav.style.display = "none"; nav.innerHTML = "";
       }
     }
-    const jpOnly = calMode === "week";        // 每周模式：只显示日本动画（含未开播/已完结，但排除国产与欧美卡通）
+    const jpOnly = true;        // 每周 / 每季度 两种视图都只显示日本动画（含未开播/已完结，但排除国产与欧美卡通）
     const seasonTotal = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) > 0 && (!jpOnly || isJapanese(a))).length;
     const desc = $("#cal-desc");
     if (desc) desc.textContent = calMode === "week"
       ? `本周放送 · ${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部日本动画按周更新（含未开播，今天高亮）`
-      : (isCurrent ? `当前真实季度 · 共 ${seasonTotal} 部番剧按周放送；点「下季」可预览未来番剧`
-                   : `${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部番剧（点「下季/上季」切换）`);
+      : (isCurrent ? `当前真实季度 · 共 ${seasonTotal} 部日本动画按周放送；点「下季」可预览未来番剧`
+                   : `${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部日本动画（点「下季/上季」切换）`);
     grid.innerHTML = WEEK.map((d, idx) => {
       const wd = idx + 1;
       // 选中季度的番剧，按放送星期归列（下季度数据一进来就显示）
