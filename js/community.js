@@ -105,6 +105,7 @@
     // 登录态（含 role 身份）加载完成后，补订阅私信通道 + 重新渲染首页公告栏，
     // 确保站长/管理员能在身份就绪后看到「编辑」按钮
     setupRealtime();
+    setupAnnounceLayout();
     renderAnnouncement(document.getElementById("announce-panel"));
     // 登录 / 登出时同步刷新公告栏的编辑权限与实时通道
     try {
@@ -1567,6 +1568,7 @@
           <button class="btn btn-ghost" id="ann-cancel">取消</button>
           <button class="btn btn-primary" id="ann-save">保存公告</button>
         </div>
+        <div style="margin-top:10px;text-align:right"><span class="announce-reset" id="ann-reset">重置公告位置/大小</span></div>
       </div>`;
     document.body.appendChild(overlay);
 
@@ -1583,6 +1585,8 @@
     rmBtn.onclick = () => { preview.src = ""; preview.style.display = "none"; fileInput.value = ""; rmBtn.style.display = "none"; };
     document.getElementById("ann-cancel").onclick = closeAnnEditor;
     document.getElementById("ann-save").onclick = saveAnnouncement;
+    const resetLink = document.getElementById("ann-reset");
+    if (resetLink) resetLink.onclick = () => { resetAnnounceLayout(document.getElementById("announce-panel")); closeAnnEditor(); toast("已重置公告位置/大小"); };
 
     // 异步拉取已有公告回填（不影响弹窗已显示）
     if (sb) {
@@ -1638,6 +1642,82 @@
       toast("保存失败：" + (e.message || e));
       saveBtn.textContent = "保存公告"; saveBtn.disabled = false;
     }
+  }
+
+  /* ---------------- 公告栏布局：拖动 / 缩放 / 持久化（仅站长/管理员） ---------------- */
+  const ANN_LAYOUT_KEY = "announce_layout";
+  // 存相对 offsetParent 的偏移（而非视口坐标），滚动后也不会错位
+  function saveAnnounceLayout(panel) {
+    try {
+      const r = panel.getBoundingClientRect();
+      const p = panel.offsetParent ? panel.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
+      localStorage.setItem(ANN_LAYOUT_KEY, JSON.stringify({
+        left: r.left - p.left, top: r.top - p.top, width: r.width, height: r.height
+      }));
+    } catch (e) { /* 忽略 */ }
+  }
+  function applyAnnounceLayout(panel) {
+    try {
+      const raw = localStorage.getItem(ANN_LAYOUT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      panel.style.right = "auto";
+      panel.style.left = d.left + "px";
+      panel.style.top = d.top + "px";
+      panel.style.width = d.width + "px";
+      panel.style.height = d.height + "px";
+    } catch (e) { /* 忽略 */ }
+  }
+  function resetAnnounceLayout(panel) {
+    try { localStorage.removeItem(ANN_LAYOUT_KEY); } catch (e) {}
+    panel.style.right = "4%";
+    panel.style.left = "auto";
+    panel.style.top = "84px";
+    panel.style.width = "260px";
+    panel.style.height = "380px";
+  }
+  // 仅在面板拖动/缩放结束后保存，避免高频写入
+  let _annLayoutT = null;
+  function scheduleSaveAnnounce(panel) {
+    clearTimeout(_annLayoutT);
+    _annLayoutT = setTimeout(() => saveAnnounceLayout(panel), 400);
+  }
+  function setupAnnounceLayout() {
+    const panel = document.getElementById("announce-panel");
+    if (!panel) return;
+    applyAnnounceLayout(panel); // 应用上次保存的布局
+    // 拖动：在公告标题栏按下（非按钮）即拖动；仅站长/管理员
+    panel.addEventListener("mousedown", (e) => {
+      if (!isAdmin()) return;
+      const head = e.target.closest(".ac-head");
+      if (!head) return;                 // 只有抓标题栏才能拖
+      if (e.target.closest("button")) return; // 编辑按钮不触发拖动
+      e.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      const offX = e.clientX - rect.left;
+      const offY = e.clientY - rect.top;
+      panel.style.right = "auto";
+      panel.style.left = rect.left + "px";
+      panel.style.top = rect.top + "px";
+      panel.classList.add("dragging");
+      const move = (ev) => {
+        panel.style.left = (ev.clientX - offX) + "px";
+        panel.style.top = (ev.clientY - offY) + "px";
+      };
+      const up = () => {
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+        panel.classList.remove("dragging");
+        saveAnnounceLayout(panel);
+      };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    });
+    // 缩放（CSS resize:both 原生缩放）结束后保存尺寸
+    try {
+      const ro = new ResizeObserver(() => scheduleSaveAnnounce(panel));
+      ro.observe(panel);
+    } catch (e) { /* 老浏览器无 ResizeObserver，忽略 */ }
   }
 
   /* ---------------- 导出 ---------------- */
