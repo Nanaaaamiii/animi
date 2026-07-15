@@ -320,6 +320,16 @@
       const it = e.target.closest("#mine-grid .anime-card");
       if (it && window.openModal) window.openModal(+it.dataset.id);
     });
+    // 「我的」子标签：收藏 / 番剧评论 / 论坛
+    const mtab = $("#mine-tabs");
+    if (mtab) mtab.addEventListener("click", (e) => {
+      const b = e.target.closest(".mine-tab"); if (!b) return;
+      $$(".mine-tab", mtab).forEach(x => x.classList.remove("active")); b.classList.add("active");
+      window.__mineTab = b.dataset.mt;
+      $$(".mine-pane").forEach(p => p.classList.add("hidden"));
+      const pane = $("#mine-" + b.dataset.mt); if (pane) pane.classList.remove("hidden");
+      renderMine();
+    });
   }
 
   /* ---------------- 论坛 (B) ---------------- */
@@ -712,13 +722,19 @@
   }
 
   async function renderMine() {
-    const grid = $("#mine-grid"), stats = $("#mine-stats"), filter = $("#mine-filter"), count = $("#mine-count"), empty = $("#mine-empty");
+    const grid = $("#mine-grid"), stats = $("#mine-stats"), filter = $("#mine-filter"), empty = $("#mine-empty");
     if (!grid) return;
     if (!USER) {
-      grid.innerHTML = ""; stats.innerHTML = ""; filter.innerHTML = ""; count.textContent = "共 0 部";
+      grid.innerHTML = ""; stats.innerHTML = ""; filter.innerHTML = "";
       if (empty) { empty.hidden = false; empty.querySelector("p").textContent = "请先登录后查看你的收藏。"; }
       return;
     }
+    // 当前子标签（collect / reviews / posts）
+    const mt = window.__mineTab || "collect";
+    if (mt === "reviews") return renderMineReviews();
+    if (mt === "posts") return renderMinePosts();
+
+    // ---- 收藏 ----
     const { data, error } = await sb.from("collections").select("*").eq("user_id", USER.id);
     if (error) { grid.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
     let list = (data || []).map(c => ({ a: window.ANIME_DATA.find(x => x.id === c.anime_id), c })).filter(x => x.a);
@@ -728,7 +744,6 @@
     const counts = { all: list.length }; STATUS_ORDER.forEach(k => counts[k] = list.filter(x => x.c.status === k).length);
     stats.innerHTML = STATUS_ORDER.map(k => `<div class="mine-stat"><b>${counts[k]}</b><span>${STATUS[k]}</span></div>`).join("");
     filter.innerHTML = `<button class="f-chip ${f === "all" ? "active" : ""}" data-f="all">全部</button>` + STATUS_ORDER.map(k => `<button class="f-chip ${f === k ? "active" : ""}" data-f="${k}">${STATUS[k]} ${counts[k]}</button>`).join("");
-    count.textContent = `共 ${filtered.length} 部`;
     if (!filtered.length) {
       if (empty) { empty.hidden = false; empty.querySelector("p").textContent = f === "all" ? "还没有收藏任何番剧。" : "该状态暂无番剧，去动画库添加吧。"; }
       grid.innerHTML = "";
@@ -737,6 +752,77 @@
       grid.innerHTML = filtered.map(x => mineCardHTML(x.a, x.c)).join("");
     }
   }
+
+  async function renderMineReviews() {
+    const list = $("#mine-reviews-list"), empty = $("#mine-reviews-empty");
+    if (!list) return;
+    const { data, error } = await sb.from("anime_comments")
+      .select("id,anime_id,body,created_at,images,parent_id")
+      .eq("user_id", USER.id).is("parent_id", null)
+      .order("created_at", { ascending: false }).limit(100);
+    if (error) { list.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    if (!data || !data.length) { list.innerHTML = ""; if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+    list.innerHTML = data.map(c => {
+      const a = window.ANIME_DATA.find(x => x.id === c.anime_id);
+      return `<div class="post-card mine-post" data-id="${c.id}" data-anime="${c.anime_id}">
+        <div class="post-main">
+          <div class="post-title">📺 ${esc(a ? a.title : "未知番剧")}</div>
+          ${c.body ? `<div class="post-body">${esc(c.body)}</div>` : ""}
+          ${imagesHTML(c.images)}
+          <div class="post-meta"><span class="c-time">${timeAgo(c.created_at)}</span></div>
+        </div>
+        <button class="post-del" data-del-rev="${c.id}">删除</button>
+      </div>`;
+    }).join("");
+    bindMinePostEvents(list);
+  }
+
+  async function renderMinePosts() {
+    const list = $("#mine-posts-list"), empty = $("#mine-posts-empty");
+    if (!list) return;
+    const { data, error } = await sb.from("forum_posts")
+      .select("id,title,body,created_at").eq("user_id", USER.id)
+      .order("created_at", { ascending: false }).limit(100);
+    if (error) { list.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    if (!data || !data.length) { list.innerHTML = ""; if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+    list.innerHTML = data.map(p => `
+      <div class="post-card mine-post" data-id="${p.id}">
+        <div class="post-main">
+          <div class="post-title">${esc(p.title)}</div>
+          <div class="post-body">${esc(p.body)}</div>
+          <div class="post-meta"><span class="c-time">${timeAgo(p.created_at)}</span></div>
+        </div>
+        <button class="post-del" data-del-post="${p.id}">删除</button>
+      </div>`).join("");
+    bindMinePostEvents(list);
+  }
+
+  function bindMinePostEvents(list) {
+    // 番剧卡片点击 → 详情页
+    list.querySelectorAll(".mine-post[data-anime]").forEach(card => card.onclick = (e) => {
+      if (e.target.closest(".post-del")) return;
+      if (window.openModal) window.openModal(+card.dataset.anime);
+    });
+    // 删除番剧评论（连同其楼中楼回复）
+    list.querySelectorAll("[data-del-rev]").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm("确定删除这条番剧评论？其下的回复也会一并删除。")) return;
+      const { error } = await sb.from("anime_comments").delete().eq("id", b.dataset.delRev).eq("user_id", USER.id);
+      if (error) { toast("删除失败：" + error.message); return; }
+      toast("已删除"); renderMineReviews();
+    });
+    // 删除论坛帖子
+    list.querySelectorAll("[data-del-post]").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm("确定删除这条论坛帖子？")) return;
+      const { error } = await sb.from("forum_posts").delete().eq("id", b.dataset.delPost).eq("user_id", USER.id);
+      if (error) { toast("删除失败：" + error.message); return; }
+      toast("已删除"); renderMinePosts();
+    });
+  }
+
   function mineCardHTML(a, c) {
     return `<article class="anime-card tilt" data-id="${a.id}">
       <div class="cover" style="background-image:${grad(a.id)}">
