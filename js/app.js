@@ -134,14 +134,15 @@
     }
     return 0;
   }
-  // 是否「正在放送中」：已完结的不要；首播日期在未来（还没开始放映）的也不要。
-  // 仅用于「每周放送」模式；每季度模式需看到往季/来季，不做此过滤。
-  function isAiringNow(a) {
-    if (a.status === "已完结") return false;
-    if (a.date && /^\d{4}-\d{2}-\d{2}/.test(a.date)) {
-      const d = new Date(a.date + "T00:00:00");
-      if (d > new Date()) return false;   // 还没开始放映
-    }
+  // 是否「日本动画」：数据无国家字段，用排除法（只排除明显非日番，绝不误删日本番）。
+  // 1) 原名 jp 为空 → 多为国产；2) 纯拉丁字母(无中日韩字) → 欧美卡通；
+  // 3) 含简体中文独有字(如 传/记/忆/阴/们，日本用不同字形) → 国产动画。
+  const _SIMPLIFIED_ONLY = /[传关图认让记亿阴东车灭办单查乐荣劳压佛册权观语说读对孙们侠灵陆苏]/;
+  function isJapanese(a) {
+    const jp = (a.jp || "").trim();
+    if (!jp) return false;                              // 无原名 → 国产
+    if (!/[\u4e00-\u9fff]/.test(jp)) return false;      // 纯欧美动画(蝙蝠侠/SpongeBob 等)
+    if (_SIMPLIFIED_ONLY.test(jp)) return false;        // 含简体独有字 → 国产动画
     return true;
   }
   let calSel = seasonOfDate(new Date());   // 每季度模式下的选中季度
@@ -169,17 +170,17 @@
         nav.style.display = "none"; nav.innerHTML = "";
       }
     }
-    const airingOnly = calMode === "week";   // 每周模式：只显示正在放送的（排除未开播/已完结）
-    const seasonTotal = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) > 0 && (!airingOnly || isAiringNow(a))).length;
+    const jpOnly = calMode === "week";        // 每周模式：只显示日本动画（含未开播/已完结，但排除国产与欧美卡通）
+    const seasonTotal = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) > 0 && (!jpOnly || isJapanese(a))).length;
     const desc = $("#cal-desc");
     if (desc) desc.textContent = calMode === "week"
-      ? `本周放送 · ${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部番剧按周更新（今天高亮）`
+      ? `本周放送 · ${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部日本动画按周更新（含未开播，今天高亮）`
       : (isCurrent ? `当前真实季度 · 共 ${seasonTotal} 部番剧按周放送；点「下季」可预览未来番剧`
                    : `${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部番剧（点「下季/上季」切换）`);
     grid.innerHTML = WEEK.map((d, idx) => {
       const wd = idx + 1;
       // 选中季度的番剧，按放送星期归列（下季度数据一进来就显示）
-      const list = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) === wd && (!airingOnly || isAiringNow(a)))
+      const list = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) === wd && (!jpOnly || isJapanese(a)))
                        .sort((x, y) => (y.rating || 0) - (x.rating || 0));
       const expanded = !!calExpanded[wd];
       const shown = expanded ? list : list.slice(0, 12);
