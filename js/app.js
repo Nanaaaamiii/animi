@@ -129,17 +129,29 @@
     renderCoverMarquee();
   }
 
-  // 首页「热门番剧」封面滚动播放：从评分可靠的热门番剧里随机抽 5 张，无缝循环滚动
+  // 首页「热门番剧」封面滚动播放：从「本周放送表」(当前季度 + 有放送日 + 日本动画) 随机抽若干部，
+  // 带封面 + 名字 + 评分，无缝循环滚动；数据未覆盖本季时回退到评分可靠的热门番剧。
   function renderCoverMarquee() {
     const track = $("#cover-track"); if (!track) return;
-    const pool = DATA.filter(a => ratingReliable(a) && a.cover)
-      .sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 60);
+    const nowSeason = seasonOfDate(new Date());
+    // 与放送时间表「每周放送」同口径：当前真实季度 + broadcastWeekday>0 + 日本动画 + 有封面
+    let pool = DATA.filter(a =>
+      a.year === nowSeason.year && a.season === nowSeason.season &&
+      broadcastWeekday(a) > 0 && isJapanese(a) && a.cover
+    );
+    if (!pool.length) {
+      // 数据未覆盖本季时回退：评分可靠 + 有封面的热门番剧
+      pool = DATA.filter(a => ratingReliable(a) && a.cover)
+        .sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 60);
+    }
     if (!pool.length) { const m = $("#cover-marquee"); if (m) m.style.display = "none"; return; }
     const copy = pool.slice(), pick = [];
-    for (let i = 0; i < 5 && copy.length; i++) pick.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
+    const N = Math.min(8, copy.length);
+    for (let i = 0; i < N; i++) pick.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
     const cell = (a) => `<div class="cover-cell" data-id="${a.id}">
         <div class="cover-img" style="background-image:url('${a.cover}')"></div>
         <div class="cover-cap">${esc(a.title)}</div>
+        <div class="cover-rating">${star}${rateText(a)}</div>
       </div>`;
     // 复制一份用于无缝循环（动画位移 -50%）
     track.innerHTML = pick.map(cell).join("") + pick.map(cell).join("");
