@@ -383,7 +383,7 @@
     const { data: vres } = await sb.rpc("inc_post_view", { p_id: id });
     const views = (vres && vres[0] && vres[0].inc_post_view) || post.views || 0;
     const names = await fetchNames([post.user_id]);
-    const { data: comments } = await sb.from("forum_comments").select("id,body,created_at,user_id").eq("post_id", id).order("created_at", { ascending: true });
+    const { data: comments } = await sb.from("forum_comments").select("id,body,created_at,user_id,images").eq("post_id", id).order("created_at", { ascending: true });
     currentPostId = id;
     modal.innerHTML = `
       <button class="modal-close" id="comm-close">✕</button>
@@ -396,8 +396,14 @@
       <div class="comm-divider">评论 ${comments ? comments.length : 0}</div>
       <div id="comment-list" class="comment-list">${comments && comments.length ? comments.map(c => commentHTML(c, names[c.user_id])).join("") : `<div class="empty">还没有评论</div>`}</div>
       <div class="comment-form">
-        <textarea id="comment-input" class="cb-textarea" placeholder="${USER ? "说点什么…" : "登录后即可评论"}"></textarea>
-        <button class="btn btn-primary" id="comment-send" style="justify-content:center">${USER ? "发送" : "登录"}</button>
+        <textarea id="comment-input" class="cb-textarea" placeholder="${USER ? "说点什么…（支持插入图片）" : "登录后即可评论"}"></textarea>
+        <div class="ac-thumbs" id="fc-thumbs"></div>
+        <div class="ac-bar">
+          <label class="ac-imgbtn" title="插入图片">🖼️ 图片
+            <input type="file" id="fc-file" accept="image/*" multiple hidden>
+          </label>
+          <button class="btn btn-primary" id="comment-send" style="margin-left:auto;justify-content:center">${USER ? "发送" : "登录"}</button>
+        </div>
       </div>`;
     $("#comm-close").onclick = closeComm;
     const list = $("#comment-list");
@@ -405,12 +411,35 @@
       const b = e.target.closest(".c-del"); if (!b) return;
       await sb.from("forum_comments").delete().eq("id", b.dataset.id).eq("user_id", USER.id); openPost(id);
     });
+    // 图片选择
+    let fcImgs = [];
+    const fcThumbs = $("#fc-thumbs"), fcFile = $("#fc-file");
+    if (fcThumbs) {
+      fcFile.addEventListener("change", () => {
+        for (const f of [...(fcFile.files || [])]) {
+          if (!f.type.startsWith("image/")) { toast("只能插入图片"); continue; }
+          if (f.size > 5 * 1024 * 1024) { toast("单张图片不能超过 5MB"); continue; }
+          if (fcImgs.length >= 6) { toast("最多插入 6 张图片"); break; }
+          fcImgs.push(f);
+        }
+        fcFile.value = ""; fcThumbs.innerHTML = fcImgs.map((f, i) => `<div class="ac-thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="ac-thumb-x" data-i="${i}">✕</button></div>`).join("");
+        fcThumbs.querySelectorAll(".ac-thumb-x").forEach(b => b.onclick = () => { fcImgs.splice(+b.dataset.i, 1); fcThumbs.innerHTML = fcImgs.map((f, i) => `<div class="ac-thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="ac-thumb-x" data-i="${i}">✕</button></div>`).join(""); });
+      });
+    }
     $("#comment-send").onclick = async () => {
       if (!USER) { openIdentity(); return; }
-      const v = $("#comment-input").value.trim(); if (!v) return;
-      const { error } = await sb.from("forum_comments").insert({ post_id: id, user_id: USER.id, body: v });
-      if (error) { toast("评论失败：" + error.message); return; }
-      $("#comment-input").value = ""; await awardExp(2); openPost(id);
+      const v = $("#comment-input").value.trim(); if (!v && !fcImgs.length) return;
+      const btn = $("#comment-send"); btn.disabled = true; const oldTxt = btn.textContent;
+      try {
+        let imgUrls = [];
+        if (fcImgs.length) { btn.textContent = "上传中…"; for (const f of fcImgs) imgUrls.push(await uploadCommentImage(f)); }
+        const row = { post_id: id, user_id: USER.id, body: v };
+        if (imgUrls.length) row.images = imgUrls;
+        const { error } = await sb.from("forum_comments").insert(row);
+        if (error) { toast("评论失败：" + error.message); return; }
+        $("#comment-input").value = ""; fcImgs = []; if (fcThumbs) fcThumbs.innerHTML = ""; await awardExp(2); openPost(id);
+      } catch (e) { toast("图片上传失败：" + (e.message || e)); }
+      finally { btn.disabled = false; btn.textContent = oldTxt; }
     };
   }
 
