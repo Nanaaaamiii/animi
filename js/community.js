@@ -667,7 +667,7 @@
         closeComm();
         openAnimeDiscussion(aid, t, cid);
       };
-      // 点卡片其它区域 → 打开番剧详情页
+      // 点卡片其它区域 → 关闭社区弹窗并打开番剧详情页
       card.onclick = () => {
         if (window.openModal) { closeComm(); window.openModal(+card.dataset.anime); }
       };
@@ -800,10 +800,10 @@
   }
 
   function bindMinePostEvents(list) {
-    // 番剧卡片点击 → 详情页
+    // 番剧卡片点击 → 关闭社区弹窗并打开详情页
     list.querySelectorAll(".mine-post[data-anime]").forEach(card => card.onclick = (e) => {
       if (e.target.closest(".post-del")) return;
-      if (window.openModal) window.openModal(+card.dataset.anime);
+      if (window.openModal) { closeComm(); window.openModal(+card.dataset.anime); }
     });
     // 删除番剧评论（连同其楼中楼回复）
     list.querySelectorAll("[data-del-rev]").forEach(b => b.onclick = async (e) => {
@@ -852,7 +852,7 @@
         <div class="meta"><div class="title">${esc(a.title)}</div><div class="sub">社区均分 ${t.avg.toFixed(1)} · ${t.n} 人评</div></div>
       </article>`;
     }).join("");
-    $$(".anime-card", wrap).forEach(c => c.onclick = () => { if (window.openModal) window.openModal(+c.dataset.id); });
+    $$(".anime-card", wrap).forEach(c => c.onclick = () => { if (window.openModal) { closeComm(); window.openModal(+c.dataset.id); } });
   }
 
   /* ---------------- Realtime ---------------- */
