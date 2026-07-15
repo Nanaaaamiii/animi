@@ -44,14 +44,24 @@
   const uidTag = (profile) => (profile && profile.uid != null) ? `<span class="c-uid">UID:${profile.uid}</span>` : "";
   // 可点击跳转用户主页的包裹（头像/昵称用）：点开对方的「我的」
   const uLink = (inner, id) => `<span class="u-link" data-uid="${esc(id)}">${inner}</span>`;
-  // 管理员判定：站长 / 管理员 可删除所有人内容
-  const isAdmin = () => !!(USER && USER.profile && (USER.profile.role === "站长" || USER.profile.role === "管理员"));
-  // 用户称号（如「站长」），数据来自 profiles.role
+  // 管理员判定：站长 / 管理员 可删除所有人内容（role 或 extra_role 任一命中即可，支持双身份）
+  const isAdmin = () => {
+    if (!USER || !USER.profile) return false;
+    const r = USER.profile.role, e = USER.profile.extra_role;
+    return r === "站长" || r === "管理员" || e === "站长" || e === "管理员";
+  };
+  // 用户称号（如「站长」「管理员」），数据来自 profiles.role / extra_role（支持同时显示两个徽章）
   const ROLE_CLASS = { "站长": "role-owner", "管理员": "role-admin", "编辑": "role-editor" };
+  const roleBadge = (r) => {
+    if (!r) return "";
+    const cls = ROLE_CLASS[r] || "role-custom";
+    return `<span class="role-badge ${cls}">${esc(r)}</span>`;
+  };
   const roleTag = (profile) => {
-    if (!profile || !profile.role) return "";
-    const cls = ROLE_CLASS[profile.role] || "role-custom";
-    return `<span class="role-badge ${cls}">${esc(profile.role)}</span>`;
+    if (!profile) return "";
+    // 主身份 + 副身份（去重），依次渲染，实现「站长 + 管理员」双徽章
+    const roles = [profile.role, profile.extra_role].filter((r, i, arr) => r && arr.indexOf(r) === i);
+    return roles.map(roleBadge).join("");
   };
   const timeAgo = (t) => {
     const d = (Date.now() - new Date(t).getTime()) / 1000;
@@ -623,9 +633,11 @@
     const names = await fetchNames(ids);
     const { data: cs } = await sb.from("forum_comments").select("post_id").in("post_id", ids);
     const cnt = {}; (cs || []).forEach(c => cnt[c.post_id] = (cnt[c.post_id] || 0) + 1);
+    const canDel = (uid) => isAdmin() || (USER && USER.id === uid);
     wrap.innerHTML = data.map(p => `
       <div class="post-card" data-id="${p.id}">
         <div class="post-main">
+          ${canDel(p.user_id) ? `<button class="post-del" data-del-post="${p.id}">删除</button>` : ""}
           <div class="post-title">${esc(p.title)}</div>
           <div class="post-body">${esc(p.body)}</div>
           ${imagesHTML(p.images)}
@@ -633,11 +645,18 @@
         </div>
       </div>`).join("");
     $$(".post-card", wrap).forEach(c => c.onclick = () => openPost(c.dataset.id));
+    wrap.querySelectorAll("[data-del-post]").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm("确定删除这条论坛帖子？")) return;
+      const { error } = await sb.from("forum_posts").delete().eq("id", b.dataset.delPost);
+      if (error) { toast("删除失败：" + error.message); return; }
+      toast("已删除"); renderForum();
+    });
   }
 
   async function fetchNames(ids) {
     if (!ids.length) return {};
-    const { data } = await sb.from("profiles").select("id,username,avatar_url,uid,role").in("id", ids);
+    const { data } = await sb.from("profiles").select("id,username,avatar_url,uid,role,extra_role").in("id", ids);
     const m = {}; (data || []).forEach(u => m[u.id] = u); return m;
   }
 
@@ -655,7 +674,10 @@
     modal.innerHTML = `
       <button class="modal-close" id="comm-close">✕</button>
       <div class="comm-post">
-        <div class="post-title">${esc(post.title)}</div>
+        <div class="comm-post-head">
+          <div class="post-title">${esc(post.title)}</div>
+          ${(isAdmin() || (USER && USER.id === post.user_id)) ? `<button class="post-del" id="post-del-btn">删除</button>` : ""}
+        </div>
         <div class="post-body" style="white-space:pre-wrap">${esc(post.body)}</div>
         ${imagesHTML(post.images)}
         <div class="post-meta">${uLink(`<span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span>`, post.user_id)}<span class="u-link" data-uid="${post.user_id}">@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${roleTag(names[post.user_id])}${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
@@ -673,6 +695,13 @@
         </div>
       </div>`;
     $("#comm-close").onclick = closeComm;
+    const delBtn = $("#post-del-btn");
+    if (delBtn) delBtn.onclick = async () => {
+      if (!confirm("确定删除这条论坛帖子？")) return;
+      const { error } = await sb.from("forum_posts").delete().eq("id", id);
+      if (error) { toast("删除失败：" + error.message); return; }
+      toast("已删除"); closeComm(); renderForum();
+    };
     const list = $("#comment-list");
     if (list) list.addEventListener("click", async (e) => {
       const b = e.target.closest(".c-del"); if (!b) return;
