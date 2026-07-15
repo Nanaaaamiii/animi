@@ -299,6 +299,14 @@
   }
   function closeComm() { const m = $("#comm-mask"); if (m) m.classList.remove("open"); document.body.style.overflow = ""; }
 
+  // 统一打开番剧详情：先关掉社区弹窗 + 详情弹窗，避免层级遮挡
+  function openAnimeDetail(id) {
+    if (typeof id !== "number") id = +id;
+    const dm = $("#modal-mask"); if (dm) dm.classList.remove("open");
+    closeComm();
+    if (window.openModal) window.openModal(id);
+  }
+
   /* ---------------- UI 绑定 ---------------- */
   function bindCommunityUI() {
     const mask = $("#comm-mask");
@@ -318,7 +326,7 @@
     });
     document.addEventListener("click", (e) => {
       const it = e.target.closest("#mine-grid .anime-card");
-      if (it && window.openModal) window.openModal(+it.dataset.id);
+      if (it) openAnimeDetail(it.dataset.id);
     });
     // 「我的」子标签：收藏 / 番剧评论 / 论坛
     const mtab = $("#mine-tabs");
@@ -667,10 +675,8 @@
         closeComm();
         openAnimeDiscussion(aid, t, cid);
       };
-      // 点卡片其它区域 → 关闭社区弹窗并打开番剧详情页
-      card.onclick = () => {
-        if (window.openModal) { closeComm(); window.openModal(+card.dataset.anime); }
-      };
+      // 点卡片其它区域 → 打开番剧详情页
+      card.onclick = () => openAnimeDetail(card.dataset.anime);
     });
     const rvNew = $("#rv-new", wrap); if (rvNew) rvNew.onclick = openReviewComposer;
   }
@@ -800,10 +806,10 @@
   }
 
   function bindMinePostEvents(list) {
-    // 番剧卡片点击 → 关闭社区弹窗并打开详情页
+    // 番剧卡片点击 → 打开详情页
     list.querySelectorAll(".mine-post[data-anime]").forEach(card => card.onclick = (e) => {
       if (e.target.closest(".post-del")) return;
-      if (window.openModal) { closeComm(); window.openModal(+card.dataset.anime); }
+      openAnimeDetail(card.dataset.anime);
     });
     // 删除番剧评论（连同其楼中楼回复）
     list.querySelectorAll("[data-del-rev]").forEach(b => b.onclick = async (e) => {
@@ -852,7 +858,7 @@
         <div class="meta"><div class="title">${esc(a.title)}</div><div class="sub">社区均分 ${t.avg.toFixed(1)} · ${t.n} 人评</div></div>
       </article>`;
     }).join("");
-    $$(".anime-card", wrap).forEach(c => c.onclick = () => { if (window.openModal) { closeComm(); window.openModal(+c.dataset.id); } });
+    $$(".anime-card", wrap).forEach(c => c.onclick = () => openAnimeDetail(c.dataset.id));
   }
 
   /* ---------------- Realtime ---------------- */
