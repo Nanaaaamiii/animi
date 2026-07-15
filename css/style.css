@@ -296,7 +296,8 @@ header.nav {
 .cal-item .r { font-size: 11px; color: var(--gold); font-weight: 800; margin-top: 3px; display: flex; align-items: center; gap: 3px; }
 .cal-item .r svg { width: 11px; height: 11px; fill: var(--gold); }
 .cal-empty { color: var(--text-faint); font-size: 12px; text-align: center; padding: 20px 0; opacity: .6; }
-.cal-more { padding: 8px; text-align: center; color: var(--text-faint); font-size: 12px; border-top: 1px dashed var(--border); margin-top: 4px; }
+.cal-more { padding: 9px 8px; text-align: center; color: var(--accent, #c56cf0); font-size: 12px; font-weight: 700; border-top: 1px dashed var(--border); margin-top: 4px; cursor: pointer; transition: background .15s, color .15s; }
+.cal-more:hover { background: var(--surface-2, rgba(255,255,255,.06)); color: var(--accent, #c56cf0); }
 
 /* ---------- 筛选条 ---------- */
 .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 26px; }
