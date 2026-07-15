@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>番组计划 · Animi — 动画资讯站</title>
-  <meta name="description" content="一个 Bangumi 风格的动画资讯网站：本季新番、每周放送表、人气排行榜与精准筛选。" />
+  <title>K-ON — 动画资讯站</title>
+  <meta name="description" content="K-ON 动画资讯站：本季新番、每周放送表、动画库、社区交流。" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -15,23 +15,26 @@
   <header class="nav">
     <div class="wrap nav-inner">
       <a class="brand" href="#" data-view="home">
-        <span class="logo">番</span>
-        <span class="name">番组计划</span>
+        <span class="name">K-ON</span>
       </a>
       <button class="nav-toggle" id="nav-toggle" aria-label="菜单">☰</button>
       <nav class="nav-links">
         <a href="#" data-view="home" class="active">首页</a>
         <a href="#" data-view="calendar">放送时间表</a>
         <a href="#" data-view="browse">动画库</a>
-        <a href="#" data-view="rank">排行榜</a>
+        <a href="#" data-view="game">动画小游戏</a>
         <a href="#" data-view="community">社区</a>
         <a href="#" data-view="mine">我的</a>
       </nav>
       <div class="nav-right">
         <label class="search-box">
-          <input id="global-search" type="text" placeholder="搜索动画 / 制作公司…" />
+          <input id="global-search" type="text" placeholder="搜索动画 / 用户昵称 / UID…" />
         </label>
+        <div class="user-search" id="user-search" hidden></div>
         <div class="user-chip" id="user-chip"></div>
+        <button class="icon-btn msg-icon" id="msg-icon" aria-label="私信" hidden>
+          ✉<span class="msg-dot" id="msg-dot" hidden></span>
+        </button>
         <button class="icon-btn" id="theme-toggle" aria-label="切换主题"></button>
       </div>
     </div>
@@ -45,9 +48,6 @@
         <canvas class="hero-canvas" id="hero-canvas"></canvas>
         <div class="wrap hero-inner">
           <div class="hero-badge fade-in-down"><span class="dot"></span> 发现 · 收藏 · 追番，一站搞定</div>
-          <h1 class="fade-in-up">
-            找到属于你的<span class="grad">下一部神番</span>
-          </h1>
           <p class="hero-sub fade-in-up"><span class="tw" id="hero-tw"></span></p>
           <div class="hero-actions fade-in-up">
             <a href="#" class="btn btn-primary magnetic to-browse">开始探索 →</a>
@@ -55,12 +55,25 @@
           </div>
           <div class="hero-stats fade-in-up">
             <div class="stat"><div class="num" id="stat-count">0</div><div class="lbl">收录作品</div></div>
-            <div class="stat"><div class="num" id="stat-avg">0</div><div class="lbl">平均评分</div></div>
-            <div class="stat"><div class="num" id="stat-season">0</div><div class="lbl">高分番剧 7★+</div></div>
           </div>
         </div>
-        <div class="hero-float f1" style="background:linear-gradient(135deg,#ff9a9e,#f6416c)"></div>
-        <div class="hero-float f2" style="background:linear-gradient(135deg,#a18cd1,#fbc2eb)"></div>
+      </div>
+
+      <!-- 首页公告栏：站长/管理员可编辑（图片+文字）、可拖动/缩放，普通用户只读 -->
+      <div id="announce-panel" class="announce-panel">
+        <!-- 由 community.js renderAnnouncement() 填充 -->
+        <div class="announce-loading">加载中…</div>
+      </div>
+
+      <!-- 热门番剧 封面滚动播放 -->
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>热门番剧</div>
+            <div class="section-desc">本周放送番剧 · 封面自动滚动（点封面看详情）</div>
+          </div>
+        </div>
+        <div class="cover-marquee" id="cover-marquee"><div class="cover-track" id="cover-track"></div></div>
       </div>
 
       <!-- 本季新番 横向轮播 -->
@@ -68,7 +81,7 @@
         <div class="section-head">
           <div>
             <div class="section-title"><span class="bar"></span>本季新番</div>
-            <div class="section-desc">2024 各季热播作品 · 拖动卡片横向浏览</div>
+            <div class="section-desc">本季度最热门番剧 · 拖动卡片横向浏览</div>
           </div>
           <a href="#" class="section-more to-browse">查看全部 →</a>
         </div>
@@ -81,23 +94,23 @@
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>编辑推荐</div>
-            <div class="section-desc">高分佳作，闭眼入也不踩雷</div>
+            <div class="section-title"><span class="bar"></span>站长推荐</div>
+            <div class="section-desc">站长私藏好番，闭眼入也不踩雷</div>
           </div>
         </div>
         <div class="card-grid reveal" id="picks-grid"></div>
       </div>
 
-      <!-- 人气预览 -->
+      <!-- 动画小游戏入口 -->
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>人气排行榜</div>
-            <div class="section-desc">综合评分 Top 5</div>
+            <div class="section-title"><span class="bar"></span>动画小游戏</div>
+            <div class="section-desc">考验你对番剧评分的直觉</div>
           </div>
-          <a href="#" class="section-more" id="section-more-rank">完整榜单 →</a>
+          <a href="#" class="section-more" data-view="game">开始挑战 →</a>
         </div>
-        <div class="rank-list" id="top5"></div>
+        <div class="game-promo" id="game-promo"></div>
       </div>
     </section>
 
@@ -106,10 +119,15 @@
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>本周放送表</div>
-            <div class="section-desc">本周每天正在放送的番剧，点击卡片看详情</div>
+            <div class="section-title"><span class="bar"></span>放送时间表</div>
+            <div class="section-desc" id="cal-desc">每周放送 · 当前季度每日更新；每季度可翻看过往与未来番剧</div>
           </div>
         </div>
+        <div class="cal-tabs" id="cal-tabs">
+          <button class="cal-tab active" data-mode="week">📺 每周放送</button>
+          <button class="cal-tab" data-mode="season">🗓️ 每季度</button>
+        </div>
+        <div class="cal-nav" id="cal-season-nav"></div>
         <div class="cal-grid reveal" id="cal-grid"></div>
       </div>
     </section>
@@ -126,8 +144,9 @@
         </div>
         <div class="filter-bar" id="filter-bar">
           <div class="filter-group">
-            <span class="filter-label">评分</span>
+            <span class="filter-label">排序</span>
             <div id="season-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            <button class="f-chip dir-btn" id="sort-dir" title="切换升序 / 降序">↓ 降序</button>
           </div>
           <div class="filter-group">
             <span class="filter-label">类型</span>
@@ -145,16 +164,16 @@
       </div>
     </section>
 
-    <!-- ============ 排行榜 ============ -->
-    <section id="view-rank" class="hidden">
+    <!-- ============ 动画小游戏 ============ -->
+    <section id="view-game" class="hidden">
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>综合评分排行榜</div>
-            <div class="section-desc">基于用户评分排序 · Top 20</div>
+            <div class="section-title"><span class="bar"></span>动画小游戏</div>
+            <div class="section-desc">从动画库随机抽取两部，猜猜谁评分更高</div>
           </div>
         </div>
-        <div class="rank-list reveal" id="rank-list"></div>
+        <div id="game-root"></div>
       </div>
     </section>
 
@@ -163,17 +182,34 @@
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>我的收藏</div>
-            <div class="section-desc">收藏状态 · 个人评分 · 评论，社区共享可见</div>
+            <div class="section-title"><span class="bar"></span>我的</div>
+            <div class="section-desc">收藏 · 我发的番剧评论 · 我发的论坛帖子</div>
           </div>
-          <div class="filter-count" id="mine-count">共 0 部</div>
         </div>
-        <div class="mine-stats" id="mine-stats"></div>
-        <div class="filter-bar" id="mine-filter"></div>
-        <div class="card-grid" id="mine-grid"></div>
-        <div class="mine-empty" id="mine-empty" hidden>
-          <p>还没有收藏任何番剧。</p>
-          <a href="#" class="btn btn-primary to-browse">去动画库逛逛 →</a>
+        <div class="mine-tabs" id="mine-tabs">
+          <button class="mine-tab active" data-mt="collect">我的收藏</button>
+          <button class="mine-tab" data-mt="reviews">番剧评论</button>
+          <button class="mine-tab" data-mt="posts">论坛帖子</button>
+        </div>
+        <!-- 收藏 -->
+        <div id="mine-collect" class="mine-pane">
+          <div class="mine-stats" id="mine-stats"></div>
+          <div class="filter-bar" id="mine-filter"></div>
+          <div class="card-grid" id="mine-grid"></div>
+          <div class="mine-empty" id="mine-empty" hidden>
+            <p>还没有收藏任何番剧。</p>
+            <a href="#" class="btn btn-primary to-browse">去动画库逛逛 →</a>
+          </div>
+        </div>
+        <!-- 番剧评论 -->
+        <div id="mine-reviews" class="mine-pane hidden">
+          <div class="post-list" id="mine-reviews-list"></div>
+          <div class="mine-empty-pane" id="mine-reviews-empty" hidden>还没有发过番剧评论，去番剧详情页或社区发一条吧～</div>
+        </div>
+        <!-- 论坛帖子 -->
+        <div id="mine-posts" class="mine-pane hidden">
+          <div class="post-list" id="mine-posts-list"></div>
+          <div class="mine-empty-pane" id="mine-posts-empty" hidden>还没有发过论坛帖子，去社区发一条吧～</div>
         </div>
       </div>
     </section>
@@ -216,7 +252,7 @@
     <div class="wrap">
       <div class="foot-grid">
         <div class="foot-brand">
-          <div class="brand"><span class="logo">番</span><span class="name">番组计划</span></div>
+          <div class="brand"><span class="name">K-ON</span></div>
           <p>一个 Bangumi 风格的动画资讯演示站。数据用于展示，评分与简介为示例内容。</p>
         </div>
         <div class="foot-col">
@@ -224,7 +260,7 @@
           <a href="#" data-view="home">首页</a>
           <a href="#" data-view="calendar">放送时间表</a>
           <a href="#" data-view="browse">动画库</a>
-          <a href="#" data-view="rank">排行榜</a>
+          <a href="#" data-view="game">动画小游戏</a>
           <a href="#" data-view="community">社区</a>
         </div>
         <div class="foot-col">
@@ -240,7 +276,7 @@
           <a href="#">联系我们</a>
         </div>
       </div>
-      <div class="foot-bottom">© 2026 番组计划 · Animi — 演示项目，非官方站点</div>
+      <div class="foot-bottom">© 2026 K-ON — 演示项目，非官方站点</div>
     </div>
   </footer>
 
