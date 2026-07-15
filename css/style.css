@@ -249,6 +249,9 @@ header.nav {
 .btn-unfollow { background: rgba(226,85,107,.10); border: 1px solid rgba(226,85,107,.32); color: #e2556b; }
 .btn-unfollow:hover { transform: translateY(-3px); background: #e2556b; color: #fff; }
 
+.profile-actions { display: flex; gap: 8px; margin-top: 6px; }
+.profile-actions .btn { flex: 1; justify-content: center; padding: 9px 10px; }
+
 .hero-stats { display: flex; gap: 40px; margin-top: 46px; flex-wrap: wrap; }
 .hero-stats .stat .num { font-size: 34px; font-weight: 900; background: linear-gradient(90deg, var(--primary-strong), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
 .hero-stats .stat .lbl { font-size: 13px; color: var(--text-faint); font-weight: 600; }
