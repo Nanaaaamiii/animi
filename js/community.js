@@ -349,7 +349,7 @@
       const b = $("#forum-login", wrap); if (b) b.onclick = openIdentity; return;
     }
     wrap.innerHTML = `<div class="loading">加载中…</div>`;
-    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id,views").order("created_at", { ascending: false }).limit(50);
+    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id,views,images").order("created_at", { ascending: false }).limit(50);
     if (error) { wrap.innerHTML = `<div class="err">加载失败：${esc(error.message)}</div>`; return; }
     if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有帖子，点右上角「＋ 发帖」抢沙发吧～</div>`; return; }
     const ids = [...new Set(data.map(p => p.user_id))];
@@ -361,6 +361,7 @@
         <div class="post-main">
           <div class="post-title">${esc(p.title)}</div>
           <div class="post-body">${esc(p.body)}</div>
+          ${imagesHTML(p.images)}
           <div class="post-meta"><span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span><span>@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${roleTag(names[p.user_id])}${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
         </div>
       </div>`).join("");
@@ -377,7 +378,7 @@
     const mask = $("#comm-mask"), modal = $("#comm-modal");
     modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="loading">加载中…</div>`;
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
-    const { data: post } = await sb.from("forum_posts").select("title,body,created_at,user_id").eq("id", id).single();
+    const { data: post } = await sb.from("forum_posts").select("title,body,created_at,user_id,views,images").eq("id", id).single();
     if (!post) { modal.innerHTML = `<div class="err">帖子不存在</div>`; return; }
     const { data: vres } = await sb.rpc("inc_post_view", { p_id: id });
     const views = (vres && vres[0] && vres[0].inc_post_view) || post.views || 0;
@@ -389,6 +390,7 @@
       <div class="comm-post">
         <div class="post-title">${esc(post.title)}</div>
         <div class="post-body" style="white-space:pre-wrap">${esc(post.body)}</div>
+        ${imagesHTML(post.images)}
         <div class="post-meta"><span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span><span>@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${roleTag(names[post.user_id])}${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
       </div>
       <div class="comm-divider">评论 ${comments ? comments.length : 0}</div>
@@ -419,17 +421,51 @@
       <button class="modal-close" id="comm-close">✕</button>
       <div class="comm-title">发帖</div>
       <input id="post-title" class="auth-input" placeholder="标题" maxlength="60"/>
-      <textarea id="post-body" class="cb-textarea" placeholder="分享点什么…" style="min-height:140px"></textarea>
+      <textarea id="post-body" class="cb-textarea" placeholder="分享点什么…（支持插入图片）" style="min-height:140px"></textarea>
+      <div class="ac-thumbs" id="post-thumbs"></div>
+      <div class="ac-bar">
+        <label class="ac-imgbtn" title="插入图片">🖼️ 图片
+          <input type="file" id="post-file" accept="image/*" multiple hidden>
+        </label>
+      </div>
       <div class="auth-err" id="post-err"></div>
       <button class="btn btn-primary" id="post-send" style="width:100%;justify-content:center">发布</button>`;
     $("#comm-close").onclick = closeComm;
-    $("#post-send").onclick = async () => {
+    // 图片选择逻辑
+    let pendingImgs = [];
+    const thumbsEl = $("#post-thumbs"), fileInput = $("#post-file");
+    function renderThumbs() {
+      thumbsEl.innerHTML = pendingImgs.map((f, i) =>
+        `<div class="ac-thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="ac-thumb-x" data-i="${i}">✕</button></div>`
+      ).join("");
+      thumbsEl.querySelectorAll(".ac-thumb-x").forEach(b => b.onclick = () => { pendingImgs.splice(+b.dataset.i, 1); renderThumbs(); });
+    }
+    fileInput.addEventListener("change", () => {
+      for (const f of [...(fileInput.files || [])]) {
+        if (!f.type.startsWith("image/")) { toast("只能插入图片"); continue; }
+        if (f.size > 5 * 1024 * 1024) { toast("单张图片不能超过 5MB"); continue; }
+        if (pendingImgs.length >= 6) { toast("最多插入 6 张图片"); break; }
+        pendingImgs.push(f);
+      }
+      fileInput.value = ""; renderThumbs();
+    });
+    const sendBtn = $("#post-send");
+    sendBtn.onclick = async () => {
       const title = $("#post-title").value.trim(), body = $("#post-body").value.trim();
       if (title.length < 2) { $("#post-err").textContent = "标题至少 2 个字"; return; }
-      if (!body) { $("#post-err").textContent = "内容不能为空"; return; }
-      const { error } = await sb.from("forum_posts").insert({ user_id: USER.id, title, body });
-      if (error) { $("#post-err").textContent = "发布失败：" + error.message; return; }
-      await awardExp(5); closeComm(); renderForum(); toast("已发布 +5 EXP");
+      if (!body && !pendingImgs.length) { $("#post-err").textContent = "内容不能为空"; return; }
+      sendBtn.disabled = true; const oldTxt = sendBtn.textContent;
+      try {
+        let imgUrls = [];
+        if (pendingImgs.length) { sendBtn.textContent = "上传中…"; for (const f of pendingImgs) imgUrls.push(await uploadCommentImage(f)); }
+        const row = { user_id: USER.id, title, body };
+        if (imgUrls.length) row.images = imgUrls;
+        const { error } = await sb.from("forum_posts").insert(row);
+        if (error) { $("#post-err").textContent = "发布失败：" + error.message; return; }
+        await awardExp(5); closeComm(); renderForum(); toast("已发布 +5 EXP");
+      } catch (e) {
+        $("#post-err").textContent = "图片上传失败：" + (e.message || e);
+      } finally { sendBtn.disabled = false; sendBtn.textContent = oldTxt; }
     };
     mask.classList.add("open"); document.body.style.overflow = "hidden";
   }
