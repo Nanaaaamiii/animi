@@ -29,9 +29,13 @@
       </nav>
       <div class="nav-right">
         <label class="search-box">
-          <input id="global-search" type="text" placeholder="搜索动画 / 制作公司…" />
+          <input id="global-search" type="text" placeholder="搜索动画 / 用户昵称 / UID…" />
         </label>
+        <div class="user-search" id="user-search" hidden></div>
         <div class="user-chip" id="user-chip"></div>
+        <button class="icon-btn msg-icon" id="msg-icon" aria-label="私信" hidden>
+          ✉<span class="msg-dot" id="msg-dot" hidden></span>
+        </button>
         <button class="icon-btn" id="theme-toggle" aria-label="切换主题"></button>
       </div>
     </div>
@@ -68,7 +72,7 @@
         <div class="section-head">
           <div>
             <div class="section-title"><span class="bar"></span>本季新番</div>
-            <div class="section-desc">2024 各季热播作品 · 拖动卡片横向浏览</div>
+            <div class="section-desc">本季度最热门番剧 · 拖动卡片横向浏览</div>
           </div>
           <a href="#" class="section-more to-browse">查看全部 →</a>
         </div>
@@ -81,8 +85,8 @@
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>编辑推荐</div>
-            <div class="section-desc">高分佳作，闭眼入也不踩雷</div>
+            <div class="section-title"><span class="bar"></span>站长推荐</div>
+            <div class="section-desc">站长私藏好番，闭眼入也不踩雷</div>
           </div>
         </div>
         <div class="card-grid reveal" id="picks-grid"></div>
@@ -131,7 +135,7 @@
         </div>
         <div class="filter-bar" id="filter-bar">
           <div class="filter-group">
-            <span class="filter-label">评分</span>
+            <span class="filter-label">排序</span>
             <div id="season-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
           </div>
           <div class="filter-group">
