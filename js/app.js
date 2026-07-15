@@ -235,6 +235,7 @@
   }
   window.openModal = openModal;   // 顶层挂载，供社区/其它模块随时调用
   function closeModal() {
+    const m = $("#modal-mask"); if (m) m.classList.remove("open");
     document.body.style.overflow = "";
   }
 
