@@ -134,6 +134,16 @@
     }
     return 0;
   }
+  // 是否「正在放送中」：已完结的不要；首播日期在未来（还没开始放映）的也不要。
+  // 仅用于「每周放送」模式；每季度模式需看到往季/来季，不做此过滤。
+  function isAiringNow(a) {
+    if (a.status === "已完结") return false;
+    if (a.date && /^\d{4}-\d{2}-\d{2}/.test(a.date)) {
+      const d = new Date(a.date + "T00:00:00");
+      if (d > new Date()) return false;   // 还没开始放映
+    }
+    return true;
+  }
   let calSel = seasonOfDate(new Date());   // 每季度模式下的选中季度
   let calMode = "week";                     // "week"=本周放送(锁定当前真实季度) | "season"=每季度(可翻季)
   function renderCalendar() {
@@ -158,7 +168,8 @@
         nav.style.display = "none"; nav.innerHTML = "";
       }
     }
-    const seasonTotal = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) > 0).length;
+    const airingOnly = calMode === "week";   // 每周模式：只显示正在放送的（排除未开播/已完结）
+    const seasonTotal = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) > 0 && (!airingOnly || isAiringNow(a))).length;
     const desc = $("#cal-desc");
     if (desc) desc.textContent = calMode === "week"
       ? `本周放送 · ${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部番剧按周更新（今天高亮）`
@@ -167,7 +178,7 @@
     grid.innerHTML = WEEK.map((d, idx) => {
       const wd = idx + 1;
       // 选中季度的番剧，按放送星期归列（下季度数据一进来就显示）
-      const list = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) === wd)
+      const list = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) === wd && (!airingOnly || isAiringNow(a)))
                        .sort((x, y) => (y.rating || 0) - (x.rating || 0));
       const shown = list.slice(0, 12);
       const extra = list.length - shown.length;
