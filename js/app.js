@@ -67,7 +67,7 @@
       $$(".reveal", root).forEach(el => el.classList.add("in"));
       ["card-grid", "cal-grid", "rank-list", "mine-grid"].forEach(cls => { const g = $("." + cls, root); if (g) g.classList.add("in"); });
     });
-    if (name === "calendar") markToday();
+    if (name === "calendar") { renderCalendar(); markToday(); }
     if (name === "mine") renderMine();
     if (name === "community" && window.Community) Community.renderForum();
   }
@@ -134,30 +134,40 @@
     }
     return 0;
   }
-  let calSel = seasonOfDate(new Date());   // 默认 = 今天所在季度，进入下季度自动滚到下季
+  let calSel = seasonOfDate(new Date());   // 每季度模式下的选中季度
+  let calMode = "week";                     // "week"=本周放送(锁定当前真实季度) | "season"=每季度(可翻季)
   function renderCalendar() {
     const grid = $("#cal-grid");
-    // 切换器
     const nav = $("#cal-season-nav");
-    if (nav) {
-      const prev = seasonStep(calSel, -1), next = seasonStep(calSel, 1);
-      nav.innerHTML = `
-        <button class="cal-nav-btn" id="cal-prev">‹ 上季</button>
-        <div class="cal-nav-cur">${calSel.year} 年 ${calSel.season}季</div>
-        <button class="cal-nav-btn" id="cal-next">下季 ›</button>`;
-      $("#cal-prev").onclick = () => { calSel = prev; renderCalendar(); };
-      $("#cal-next").onclick = () => { calSel = next; renderCalendar(); };
-    }
+    // 每周模式：锁定今天所在季度；每季度模式：用可切换的 calSel
+    const sel = calMode === "week" ? seasonOfDate(new Date()) : calSel;
     const nowSeason = seasonOfDate(new Date());
-    const sameAsNow = (calSel.year === nowSeason.year && calSel.season === nowSeason.season);
-    const seasonTotal = DATA.filter(a => a.year === calSel.year && a.season === calSel.season && broadcastWeekday(a) > 0).length;
-    const desc = $("#cal-desc"); if (desc) desc.textContent = sameAsNow
-      ? `当前真实季度 · 共 ${seasonTotal} 部番剧按周放送；点「下季」可预览未来番剧`
-      : `${calSel.year} 年 ${calSel.season}季 · 共 ${seasonTotal} 部番剧（点「下季/上季」切换）`;
+    const isCurrent = (sel.year === nowSeason.year && sel.season === nowSeason.season);
+    // 切换器：仅每季度模式显示
+    if (nav) {
+      if (calMode === "season") {
+        const prev = seasonStep(calSel, -1), next = seasonStep(calSel, 1);
+        nav.style.display = "";
+        nav.innerHTML = `
+          <button class="cal-nav-btn" id="cal-prev">‹ 上季</button>
+          <div class="cal-nav-cur">${calSel.year} 年 ${calSel.season}季</div>
+          <button class="cal-nav-btn" id="cal-next">下季 ›</button>`;
+        $("#cal-prev").onclick = () => { calSel = prev; renderCalendar(); };
+        $("#cal-next").onclick = () => { calSel = next; renderCalendar(); };
+      } else {
+        nav.style.display = "none"; nav.innerHTML = "";
+      }
+    }
+    const seasonTotal = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) > 0).length;
+    const desc = $("#cal-desc");
+    if (desc) desc.textContent = calMode === "week"
+      ? `本周放送 · ${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部番剧按周更新（今天高亮）`
+      : (isCurrent ? `当前真实季度 · 共 ${seasonTotal} 部番剧按周放送；点「下季」可预览未来番剧`
+                   : `${sel.year} 年 ${sel.season}季 · 共 ${seasonTotal} 部番剧（点「下季/上季」切换）`);
     grid.innerHTML = WEEK.map((d, idx) => {
       const wd = idx + 1;
-      // 选中季度的番剧，按放送星期归列（不再受「连载中」快照限制，下季度数据一进来就显示）
-      const list = DATA.filter(a => a.year === calSel.year && a.season === calSel.season && broadcastWeekday(a) === wd)
+      // 选中季度的番剧，按放送星期归列（下季度数据一进来就显示）
+      const list = DATA.filter(a => a.year === sel.year && a.season === sel.season && broadcastWeekday(a) === wd)
                        .sort((x, y) => (y.rating || 0) - (x.rating || 0));
       const shown = list.slice(0, 12);
       const extra = list.length - shown.length;
@@ -181,7 +191,18 @@
   function markToday() {
     const js = new Date().getDay();          // 0=Sun
     const wd = js === 0 ? 7 : js;            // 1=Mon..7=Sun
-    $$("#cal-grid .cal-col").forEach(c => c.classList.toggle("today", +c.dataset.wd === wd));
+    // 仅在「每周」模式或当前季度下高亮今天列（翻到过往/未来季时不误导）
+    const show = calMode === "week" || (calSel.year === seasonOfDate(new Date()).year && calSel.season === seasonOfDate(new Date()).season);
+    $$("#cal-grid .cal-col").forEach(c => c.classList.toggle("today", show && +c.dataset.wd === wd));
+  }
+  function bindCalendarTabs() {
+    const tabs = $("#cal-tabs"); if (!tabs) return;
+    tabs.addEventListener("click", (e) => {
+      const b = e.target.closest(".cal-tab"); if (!b) return;
+      calMode = b.dataset.mode;
+      $$(".cal-tab", tabs).forEach(t => t.classList.toggle("active", t === b));
+      renderCalendar(); markToday();
+    });
   }
 
   /* ---------------- 浏览 / 筛选 ---------------- */
@@ -604,6 +625,7 @@
     $(".search-box").insertAdjacentHTML("afterbegin", iconSearch);
     renderHome();
     renderCalendar();
+    bindCalendarTabs();
     renderRank();
     renderFilters();
     renderBrowse();
