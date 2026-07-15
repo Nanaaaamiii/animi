@@ -460,7 +460,7 @@
     return `<div class="c-imgs">${items}</div>`;
   }
 
-  async function openAnimeDiscussion(animeId, title) {
+  async function openAnimeDiscussion(animeId, title, targetCommentId) {
     const mask = $("#comm-mask"), modal = $("#comm-modal");
     modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="loading">加载中…</div>`;
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
@@ -469,6 +469,12 @@
     const ids = [...new Set((comments || []).map(c => c.user_id))];
     const names = await fetchNames(ids);
     const tree = buildTree(comments);
+    // 若指定了某条评价，则默认把回复挂到它下面（楼中楼），不再生成新卡片
+    let targetName = "";
+    if (targetCommentId && comments) {
+      const t = comments.find(c => c.id === targetCommentId);
+      if (t) { currentReplyTo = targetCommentId; targetName = (names[t.user_id] && names[t.user_id].username) || "用户"; }
+    }
     modal.innerHTML = `
       <button class="modal-close" id="comm-close">✕</button>
       <div class="comm-title">💬 讨论：${esc(title || ("动画 #" + animeId))}</div>
@@ -476,6 +482,12 @@
       <div class="reply-hint hidden" id="reply-hint"></div>
       ${commentComposerHTML("ac")}`;
     $("#comm-close").onclick = closeComm;
+    if (currentReplyTo) {
+      const hint = $("#reply-hint");
+      hint.textContent = "正在回复 @" + targetName + "（发送后将显示在其下方，不会新建卡片）";
+      hint.classList.remove("hidden");
+      setTimeout(() => { const el = document.querySelector(`.c-reply[data-id="${currentReplyTo}"]`); if (el) el.scrollIntoView({ block: "center", behavior: "smooth" }); }, 60);
+    }
     initCommentComposer("ac", async (body, images) => {
       const row = { anime_id: animeId, user_id: USER.id, body };
       if (images.length) row.images = images;
@@ -517,6 +529,8 @@
 
   function initCommentComposer(prefix, onSend) {
     let pendingImgs = [];
+    const inputEl = $("#" + prefix + "-input");
+    if (inputEl) inputEl.placeholder = currentReplyTo ? "回复楼主（将显示在其下方）…" : "说点什么…（支持插入图片）";
     const thumbsEl = $("#" + prefix + "-thumbs");
     const sendBtn = $("#" + prefix + "-send");
     const fileInput = $("#" + prefix + "-file");
@@ -629,18 +643,19 @@
         ${rt ? `<div class="rv-score">我的评分：<b style="color:#ffce3d">${stars}</b> ${rt}/10</div>` : ""}
         ${c.body ? `<div class="rv-body">${esc(c.body)}</div>` : ""}
         ${imagesHTML(c.images)}
-        <button class="rv-comment-btn" data-anime="${c.anime_id}">💬 评论 (${a ? (a.title) : ""})</button>
+        <button class="rv-comment-btn" data-anime="${c.anime_id}" data-cid="${c.id}">💬 评论 (${a ? (a.title) : ""})</button>
       </div>`;
     }).join("");
     $$(".review-card", wrap).forEach(card => {
-      // 点「评论」按钮 → 打开该番的讨论区（别人可在此楼中楼回复）
+      // 点「评论」按钮 → 打开该番讨论区并定位到这条评价，回复将挂在其下方（楼中楼）
       const cb = card.querySelector(".rv-comment-btn");
       if (cb) cb.onclick = (e) => {
         e.stopPropagation();
         const aid = +cb.dataset.anime;
+        const cid = cb.dataset.cid;
         const t = (window.ANIME_DATA.find(x => x.id === aid) || {}).title || ("动画 #" + aid);
         closeComm();
-        openAnimeDiscussion(aid, t);
+        openAnimeDiscussion(aid, t, cid);
       };
       // 点卡片其它区域 → 打开番剧详情页
       card.onclick = () => {
