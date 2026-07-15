@@ -1,5 +1,5 @@
 /* ============================================================
-   番组计划 · Animi  —  Bangumi 风格动画资讯站
+   K-ON  —  动画资讯站
    样式 + Motion.Lab 动效集成
    ============================================================ */
 
@@ -95,12 +95,9 @@ header.nav {
 }
 .nav-inner { height: 100%; display: flex; align-items: center; gap: 18px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: .5px; }
-.brand .logo {
-  width: 34px; height: 34px; border-radius: 11px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  display: grid; place-items: center; color: #fff; font-size: 18px;
-  box-shadow: 0 6px 16px rgba(225,110,150,.4);
-  animation: rotate360 9s linear infinite;
+.logo-img {
+  height: 32px; width: auto;
+  object-fit: contain;
 }
 .brand .name { background: linear-gradient(90deg, var(--primary-strong), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
