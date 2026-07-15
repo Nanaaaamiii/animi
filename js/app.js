@@ -110,22 +110,66 @@
     $("#rank-list").innerHTML = top.map((a, i) => rankItemHTML(a, i + 1)).join("");
   }
 
-  /* ---------------- 放送时间表 ---------------- */
+  /* ---------------- 放送时间表（按季度 · 自动跟随真实日期） ---------------- */
+  const SEASONS = ["冬", "春", "夏", "秋"];
+  // 当前真实季度（与 data.js 的 year/season 标注口径一致：Dec 归入同年「冬」）
+  function seasonOfDate(d) {
+    const m = d.getMonth() + 1;
+    const s = m <= 2 ? "冬" : m <= 5 ? "春" : m <= 8 ? "夏" : "秋";
+    return { year: d.getFullYear(), season: s };
+  }
+  function seasonStep(sel, dir) {
+    let i = SEASONS.indexOf(sel.season), y = sel.year;
+    i += dir;
+    if (i > 3) { i = 0; y++; } else if (i < 0) { i = 3; y--; }
+    return { year: y, season: SEASONS[i] };
+  }
+  // 推算放送星期：优先用已标注 weekday，否则用首播日期的星期（周一=1..周日=7）
+  function broadcastWeekday(a) {
+    if (a.weekday > 0) return a.weekday;
+    if (a.date && /^\d{4}-\d{2}-\d{2}/.test(a.date)) {
+      const g = new Date(a.date + "T00:00:00");
+      const w = g.getDay();
+      return w === 0 ? 7 : w;
+    }
+    return 0;
+  }
+  let calSel = seasonOfDate(new Date());   // 默认 = 今天所在季度，进入下季度自动滚到下季
   function renderCalendar() {
     const grid = $("#cal-grid");
+    // 切换器
+    const nav = $("#cal-season-nav");
+    if (nav) {
+      const prev = seasonStep(calSel, -1), next = seasonStep(calSel, 1);
+      nav.innerHTML = `
+        <button class="cal-nav-btn" id="cal-prev">‹ 上季</button>
+        <div class="cal-nav-cur">${calSel.year} 年 ${calSel.season}季</div>
+        <button class="cal-nav-btn" id="cal-next">下季 ›</button>`;
+      $("#cal-prev").onclick = () => { calSel = prev; renderCalendar(); };
+      $("#cal-next").onclick = () => { calSel = next; renderCalendar(); };
+    }
+    const nowSeason = seasonOfDate(new Date());
+    const sameAsNow = (calSel.year === nowSeason.year && calSel.season === nowSeason.season);
+    const seasonTotal = DATA.filter(a => a.year === calSel.year && a.season === calSel.season && broadcastWeekday(a) > 0).length;
+    const desc = $("#cal-desc"); if (desc) desc.textContent = sameAsNow
+      ? `当前真实季度 · 共 ${seasonTotal} 部番剧按周放送；点「下季」可预览未来番剧`
+      : `${calSel.year} 年 ${calSel.season}季 · 共 ${seasonTotal} 部番剧（点「下季/上季」切换）`;
     grid.innerHTML = WEEK.map((d, idx) => {
       const wd = idx + 1;
-      // 本周放送：只显示「正在连载」且在该星期放送的番剧
-      const list = DATA.filter(a => a.weekday === wd && a.status === "连载中").sort((x, y) => y.rating - x.rating);
-      const items = list.length
-        ? list.map(a => `
+      // 选中季度的番剧，按放送星期归列（不再受「连载中」快照限制，下季度数据一进来就显示）
+      const list = DATA.filter(a => a.year === calSel.year && a.season === calSel.season && broadcastWeekday(a) === wd)
+                       .sort((x, y) => (y.rating || 0) - (x.rating || 0));
+      const shown = list.slice(0, 12);
+      const extra = list.length - shown.length;
+      const items = shown.length
+        ? shown.map(a => `
             <div class="cal-item" data-id="${a.id}">
               <div class="cal-cover" style="background-image:url('${a.cover}'), ${cover(a.id)}; background-size:cover; background-position:center;"></div>
               <div class="cal-info">
                 <div class="t">${esc(a.title)}</div>
                 <div class="r">${star}${rateTxt(a.rating)}</div>
               </div>
-            </div>`).join("")
+            </div>`).join("") + (extra > 0 ? `<div class="cal-more">＋${extra} 部…</div>` : "")
         : `<div class="cal-empty">— 暂无 —</div>`;
       return `
       <div class="cal-col" data-wd="${wd}">
@@ -232,6 +276,26 @@
     document.body.style.overflow = "hidden";
     setupCollectBox(a);
     if (window.Community) Community.onModalOpen(a);
+    refreshLiveRating(a);   // 详情打开时实时拉取 Bangumi 最新评分（拉不到则用烘焙值）
+  }
+
+  // 评分实时刷新：客户端直连 Bangumi legacy 接口（免 token）。若浏览器被 CORS 拦截或断网，
+  // 静默回退到烘焙评分，绝不报错。
+  function refreshLiveRating(a) {
+    if (!a || !a.id) return;
+    const el = $("#modal .modal-rate span");
+    const apply = (score) => {
+      if (el && score != null && !isNaN(score)) {
+        el.textContent = rateTxt(score);
+        el.title = "Bangumi 实时评分";
+      }
+    };
+    try {
+      fetch("https://api.bgm.tv/subject/" + a.id, { headers: { "Accept": "application/json" } })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && d.rating && d.rating.score != null) apply(d.rating.score); })
+        .catch(() => {});
+    } catch (e) { /* 离线或被拦截：保持烘焙值 */ }
   }
   window.openModal = openModal;   // 顶层挂载，供社区/其它模块随时调用
   function closeModal() {
