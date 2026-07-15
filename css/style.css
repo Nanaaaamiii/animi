@@ -490,6 +490,21 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .comm-post .post-body { max-height: none; }
 .comm-divider { margin: 18px 0 10px; font-weight: 800; font-size: 14px; opacity: .85; }
 
+/* 「我的」页面子标签 + 帖子列表 */
+.mine-tabs { display: flex; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+.mine-tab { padding: 10px 22px; border-radius: 12px; font-weight: 800; font-size: 14px; cursor: pointer; color: var(--text-soft); background: var(--bg-soft); border: 1px solid var(--border); transition: all .2s; }
+.mine-tab:hover { color: var(--text); }
+.mine-tab.active { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: #fff; border-color: transparent; box-shadow: 0 6px 16px rgba(225,100,140,.3); }
+.mine-pane { margin-top: 4px; }
+.post-list { display: flex; flex-direction: column; gap: 14px; }
+.mine-post { display: flex; align-items: flex-start; gap: 12px; }
+.mine-post[data-anime] { cursor: pointer; }
+.mine-post .post-main { flex: 1; min-width: 0; }
+.post-del { flex: 0 0 auto; align-self: center; padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; color: #e2556b; background: rgba(226,85,107,.12); border: 1px solid rgba(226,85,107,.3); }
+.post-del:hover { background: #e2556b; color: #fff; }
+.mine-empty-pane { padding: 40px 10px; text-align: center; color: var(--text-faint); font-size: 14px; }
+.review-card { cursor: pointer; }
+
 .comment-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .comment-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
 .comment-item.mine { border-color: var(--primary); background: var(--primary-soft); }
