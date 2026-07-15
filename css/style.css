@@ -117,6 +117,7 @@ header.nav {
 }
 
 .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.nav-toggle { display: none; }
 .search-box {
   display: flex; align-items: center; gap: 8px;
   background: var(--bg-soft); border: 1px solid var(--border);
@@ -380,13 +381,33 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 900px) {
-  .nav-links { display: none; }
+  /* 导航改为汉堡菜单 + 下拉面板（避免手机端导航栏整体消失） */
+  .nav-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; margin-left: 4px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer;
+    order: 3;
+  }
+  header.nav { position: relative; }
+  .nav-links {
+    display: none;
+    position: absolute; top: 100%; left: 0; right: 0;
+    flex-direction: column; gap: 2px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow); padding: 8px 14px 14px; margin-left: 0;
+  }
+  .nav.open .nav-links { display: flex; }
+  .nav-links a { padding: 12px 10px; border-radius: 10px; font-size: 15px; }
+  .nav-links a.active::after { display: none; }
+  .nav-links a.active { background: var(--bg-soft); }
   .cal-grid { grid-template-columns: repeat(2, 1fr); }
   .hero-float { display: none; }
 }
 @media (max-width: 560px) {
   .cal-grid { grid-template-columns: 1fr; }
   .search-box input { width: 92px; }
+  .brand .name { display: none; }   /* 省出空间，避免顶栏溢出 */
   .hero-stats { gap: 26px; }
   .foot-grid { flex-direction: column; gap: 24px; }
 }
