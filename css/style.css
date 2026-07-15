@@ -522,6 +522,15 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .cb-lightbox.open { display: flex; }
 .cb-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 12px 48px rgba(0,0,0,.5); }
 
+/* 社区「发评价」：番剧搜索选择器 */
+.rv-picker { position: relative; margin: 6px 0 14px; }
+.rv-picker .cb-input { width: 100%; box-sizing: border-box; padding: 11px 14px; border-radius: 10px; border: 1px solid var(--line, rgba(255,255,255,.12)); background: var(--surface-2, rgba(255,255,255,.06)); color: var(--text); font-size: 14px; }
+.rv-results { position: absolute; left: 0; right: 0; top: calc(100% + 4px); max-height: 260px; overflow-y: auto; background: var(--bg-elev, #1c1622); border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 10px; z-index: 5; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+.rv-opt { padding: 10px 14px; cursor: pointer; font-size: 14px; border-bottom: 1px solid var(--line, rgba(255,255,255,.06)); }
+.rv-opt:last-child { border-bottom: none; }
+.rv-opt:hover { background: var(--surface-2, rgba(255,255,255,.06)); color: var(--accent, #c56cf0); }
+.rv-chosen { padding: 10px 14px; border-radius: 10px; background: var(--surface-2, rgba(255,255,255,.06)); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+
 .comm-title { font-size: 20px; font-weight: 800; margin-bottom: 10px; }
 .comm-sub { color: var(--text-faint); font-size: 13px; margin-bottom: 16px; }
 .loading, .empty, .err { padding: 40px 10px; text-align: center; color: var(--text-faint); font-size: 14px; }
