@@ -572,6 +572,15 @@
     $$(".to-browse").forEach(b => b.addEventListener("click", (e) => { e.preventDefault(); showView("browse"); }));
     $("#section-more-rank").addEventListener("click", (e) => { e.preventDefault(); showView("rank"); });
 
+    // 移动端汉堡菜单：展开/收起 + 点链接自动收起 + 点外部关闭
+    const navEl = document.querySelector("header.nav");
+    const navToggle = $("#nav-toggle");
+    if (navEl && navToggle) {
+      navToggle.addEventListener("click", (e) => { e.stopPropagation(); navEl.classList.toggle("open"); });
+      navEl.querySelectorAll(".nav-links a").forEach(a => a.addEventListener("click", () => navEl.classList.remove("open")));
+      document.addEventListener("click", (e) => { if (navEl.classList.contains("open") && !navEl.contains(e.target)) navEl.classList.remove("open"); });
+    }
+
     // 搜索（本地库快速筛选）
     const search = $("#global-search");
     search.addEventListener("input", () => {
