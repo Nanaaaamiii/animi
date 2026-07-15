@@ -44,6 +44,8 @@
   const uidTag = (profile) => (profile && profile.uid != null) ? `<span class="c-uid">UID:${profile.uid}</span>` : "";
   // 可点击跳转用户主页的包裹（头像/昵称用）：点开对方的「我的」
   const uLink = (inner, id) => `<span class="u-link" data-uid="${esc(id)}">${inner}</span>`;
+  // 管理员判定：站长 / 管理员 可删除所有人内容
+  const isAdmin = () => !!(USER && USER.profile && (USER.profile.role === "站长" || USER.profile.role === "管理员"));
   // 用户称号（如「站长」），数据来自 profiles.role
   const ROLE_CLASS = { "站长": "role-owner", "管理员": "role-admin", "编辑": "role-editor" };
   const roleTag = (profile) => {
@@ -301,12 +303,15 @@
           <div class="avatar-prev">${av}</div>
           <div class="uid-line">UID：<b>${p.uid != null ? p.uid : "—"}</b>${roleTag(p)}</div>
           ${statsRow}
-          <button class="btn ${following ? "btn-ghost" : "btn-primary"}" id="follow-btn" style="width:100%;justify-content:center;margin-top:6px">${following ? "已关注 · 取消关注" : "＋ 关注"}</button>
+          ${following
+            ? `<button class="btn btn-ghost" id="follow-btn" style="width:100%;justify-content:center;margin-top:6px">✓ 已关注</button><button class="btn btn-unfollow" id="unfollow-btn" style="width:100%;justify-content:center;margin-top:6px">取消关注</button>`
+            : `<button class="btn btn-primary" id="follow-btn" style="width:100%;justify-content:center;margin-top:6px">＋ 关注</button>`}
         </div>
         ${tabsHTML}
         <div id="profile-content" class="profile-content"></div>`;
       $("#comm-close").onclick = closeComm;
       $("#follow-btn").onclick = () => toggleFollow(tid);
+      const _ub = $("#unfollow-btn"); if (_ub) _ub.onclick = () => toggleFollow(tid);
       $("#fs-following").onclick = () => openFollowList("following", tid);
       $("#fs-followers").onclick = () => openFollowList("followers", tid);
       bindProfileTabs(tid, false, $("#profile-content"));
@@ -487,14 +492,14 @@
           ${imagesHTML(c.images)}
           <div class="post-meta"><span class="c-time">${timeAgo(c.created_at)}</span></div>
         </div>
-        ${isSelf ? `<button class="post-del" data-del-rev="${c.id}">删除</button>` : ""}
+        ${(isSelf || isAdmin()) ? `<button class="post-del" data-del-rev="${c.id}">删除</button>` : ""}
       </div>`;
     }).join("")}</div>`;
     host.querySelectorAll(".mine-post[data-anime]").forEach(card => card.onclick = (e) => { if (e.target.closest(".post-del")) return; openAnimeDetail(card.dataset.anime); });
-    if (isSelf) host.querySelectorAll("[data-del-rev]").forEach(b => b.onclick = async (e) => {
+    if (isSelf || isAdmin()) host.querySelectorAll("[data-del-rev]").forEach(b => b.onclick = async (e) => {
       e.stopPropagation();
       if (!confirm("确定删除这条番剧评论？其下的回复也会一并删除。")) return;
-      const { error } = await sb.from("anime_comments").delete().eq("id", b.dataset.delRev).eq("user_id", USER.id);
+      const { error } = await sb.from("anime_comments").delete().eq("id", b.dataset.delRev);
       if (error) { toast("删除失败：" + error.message); return; }
       toast("已删除"); renderProfileReviews(targetId, isSelf, host);
     });
@@ -512,13 +517,13 @@
           <div class="post-body">${esc(p.body)}</div>
           <div class="post-meta"><span class="c-time">${timeAgo(p.created_at)}</span></div>
         </div>
-        ${isSelf ? `<button class="post-del" data-del-post="${p.id}">删除</button>` : ""}
+        ${(isSelf || isAdmin()) ? `<button class="post-del" data-del-post="${p.id}">删除</button>` : ""}
       </div>`).join("")}</div>`;
     host.querySelectorAll(".mine-post[data-id]").forEach(card => card.onclick = () => openPost(card.dataset.id));
-    if (isSelf) host.querySelectorAll("[data-del-post]").forEach(b => b.onclick = async (e) => {
+    if (isSelf || isAdmin()) host.querySelectorAll("[data-del-post]").forEach(b => b.onclick = async (e) => {
       e.stopPropagation();
       if (!confirm("确定删除这条论坛帖子？")) return;
-      const { error } = await sb.from("forum_posts").delete().eq("id", b.dataset.delPost).eq("user_id", USER.id);
+      const { error } = await sb.from("forum_posts").delete().eq("id", b.dataset.delPost);
       if (error) { toast("删除失败：" + error.message); return; }
       toast("已删除"); renderProfilePosts(targetId, isSelf, host);
     });
@@ -640,7 +645,7 @@
     const list = $("#comment-list");
     if (list) list.addEventListener("click", async (e) => {
       const b = e.target.closest(".c-del"); if (!b) return;
-      await sb.from("forum_comments").delete().eq("id", b.dataset.id).eq("user_id", USER.id); openPost(id);
+      await sb.from("forum_comments").delete().eq("id", b.dataset.id); openPost(id);
     });
     // 图片选择
     let fcImgs = [];
@@ -756,10 +761,11 @@
 
   function commentHTML(c, profile, depth = 0) {
     const mine = USER && c.user_id === USER.id;
+    const adm = isAdmin();
     const name = (profile && profile.username) || "用户";
     const replies = (c._replies || []).map(r => commentHTML(r, profile, depth + 1)).join("");
     return `<div class="comment-item${mine ? " mine" : ""}${depth ? " reply" : ""}">
-      <div class="c-head">${uLink(`<span class="c-av">${avatarHTML(profile, c.user_id, "xs")}</span>`, c.user_id)}<span class="u-link" data-uid="${c.user_id}">@${esc(name)}</span>${roleTag(profile)}${uidTag(profile)}<span class="c-time">${timeAgo(c.created_at)}</span>${mine ? `<button class="c-del" data-id="${c.id}">删除</button>` : ""}</div>
+      <div class="c-head">${uLink(`<span class="c-av">${avatarHTML(profile, c.user_id, "xs")}</span>`, c.user_id)}<span class="u-link" data-uid="${c.user_id}">@${esc(name)}</span>${roleTag(profile)}${uidTag(profile)}<span class="c-time">${timeAgo(c.created_at)}</span>${(mine || adm) ? `<button class="c-del" data-id="${c.id}">删除</button>` : ""}</div>
       ${c.body ? `<div class="c-body">${esc(c.body)}</div>` : ""}
       ${imagesHTML(c.images)}
       <div class="c-actions"><button class="c-reply" data-id="${c.id}" data-name="${esc(name)}">回复</button></div>
@@ -815,7 +821,7 @@
     const list = $("#anime-comment-list");
     if (list) list.addEventListener("click", async (e) => {
       const del = e.target.closest(".c-del");
-      if (del) { await sb.from("anime_comments").delete().eq("id", del.dataset.id).eq("user_id", USER.id); openAnimeDiscussion(animeId, title); return; }
+      if (del) { await sb.from("anime_comments").delete().eq("id", del.dataset.id); openAnimeDiscussion(animeId, title); return; }
       const rep = e.target.closest(".c-reply");
       if (rep) {
         currentReplyTo = rep.dataset.id;
