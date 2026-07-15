@@ -501,6 +501,27 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .c-body { font-size: 14px; line-height: 1.55; color: var(--text); white-space: pre-wrap; }
 .comment-form { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 
+/* 评论配图 */
+.c-imgs, .rv-body + .c-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 2px; }
+.c-img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; cursor: zoom-in; border: 1px solid var(--line, rgba(255,255,255,.08)); transition: transform .15s; }
+.c-img:hover { transform: scale(1.04); }
+
+/* 评论表单：图片工具条 + 缩略图预览 */
+.ac-bar { display: flex; align-items: center; gap: 10px; }
+.ac-imgbtn { display: inline-flex; align-items: center; gap: 4px; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; color: var(--text); background: var(--surface-2, rgba(255,255,255,.06)); border: 1px solid var(--line, rgba(255,255,255,.1)); }
+.ac-imgbtn:hover { border-color: var(--accent, #c56cf0); color: var(--accent, #c56cf0); }
+.ac-bar .btn-primary { margin-left: auto; }
+.ac-thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.ac-thumbs:empty { display: none; }
+.ac-thumb { position: relative; width: 72px; height: 72px; }
+.ac-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
+.ac-thumb-x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: none; background: rgba(20,15,25,.9); color: #fff; font-size: 11px; cursor: pointer; line-height: 20px; padding: 0; }
+
+/* 大图查看 */
+.cb-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; z-index: 500; cursor: zoom-out; padding: 24px; }
+.cb-lightbox.open { display: flex; }
+.cb-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 8px; box-shadow: 0 12px 48px rgba(0,0,0,.5); }
+
 .comm-title { font-size: 20px; font-weight: 800; margin-bottom: 10px; }
 .comm-sub { color: var(--text-faint); font-size: 13px; margin-bottom: 16px; }
 .loading, .empty, .err { padding: 40px 10px; text-align: center; color: var(--text-faint); font-size: 14px; }
