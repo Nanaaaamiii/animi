@@ -253,14 +253,25 @@ header.nav {
 .hero-stats .stat .num { font-size: 34px; font-weight: 900; background: linear-gradient(90deg, var(--primary-strong), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; font-variant-numeric: tabular-nums; }
 .hero-stats .stat .lbl { font-size: 13px; color: var(--text-faint); font-weight: 600; }
 
-/* 首页右侧公告栏 */
-.announce-panel { position: absolute; right: 4%; top: 14%; z-index: 2; width: 260px; max-height: 380px; overflow-y: auto; }
+/* 首页作为公告栏的定位上下文（absolute 面板相对首页定位，不受 hero overflow 裁剪） */
+#view-home { position: relative; }
+
+/* 首页公告栏（位于 #view-home 内，可拖动 / 缩放） */
+.announce-panel { position: absolute; right: 4%; top: 84px; z-index: 30; width: 260px; height: 380px;
+  max-height: none; overflow: auto; box-sizing: border-box; resize: both;
+  box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.announce-panel.dragging { user-select: none; opacity: .92; }
+/* 拖动把手：抓住公告标题栏即可拖动（仅管理员可用，由 JS 判断） */
+.announce-card .ac-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; cursor: move; }
+.announce-card .ac-head .ac-edit-btn { cursor: pointer; }
 .announce-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: var(--shadow-hover);
   animation: fadeInUp .5s ease both; }
-.announce-card .ac-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .announce-card .ac-title { font-size: 15px; font-weight: 800; color: var(--primary-strong); letter-spacing: .3px; }
 .announce-card .ac-edit-btn { font-size: 11px; color: var(--text-faint); background: none; border: 1px solid var(--border);
-  border-radius: 6px; padding: 4px 8px; cursor: pointer; transition: all .2s; }
+  border-radius: 6px; padding: 4px 8px; transition: all .2s; }
+.announce-card .ac-edit-btn:hover { color: var(--primary); border-color: var(--primary); }
+.announce-reset { font-size: 11px; color: var(--text-faint); cursor: pointer; margin-top: 4px; display: inline-block; }
+.announce-reset:hover { color: var(--primary); }
 .announce-card .ac-edit-btn:hover { color: var(--primary); border-color: var(--primary); }
 .announce-card .ac-body { font-size: 13.5px; line-height: 1.7; color: var(--text-soft); word-break: break-word; white-space: pre-wrap; margin-bottom: 10px; }
 .announce-card .ac-img { width: 100%; border-radius: 10px; margin-bottom: 12px; object-fit: cover; max-height: 200px;
