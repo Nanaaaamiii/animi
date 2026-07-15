@@ -173,7 +173,7 @@
       const extra = list.length - shown.length;
       const items = shown.length
         ? shown.map(a => `
-            <div class="cal-item" data-id="${a.id}">
+            <div class="cal-item" data-id="${a.id}" onclick="if(window.openModal)openModal(${a.id})">
               <div class="cal-cover" style="background-image:url('${a.cover}'), ${cover(a.id)}; background-size:cover; background-position:center;"></div>
               <div class="cal-info">
                 <div class="t">${esc(a.title)}</div>
@@ -693,8 +693,7 @@
     $("#genre-chips").addEventListener("click", (e) => chipClick(e, "genre", "data-genre"));
     $("#status-chips").addEventListener("click", (e) => chipClick(e, "status", "data-status"));
 
-    // 日历 / 排行 点击
-    $("#cal-grid").addEventListener("click", (e) => { const it = e.target.closest(".cal-item"); if (it) openModal(+it.dataset.id); });
+    // 排行点击（日历卡片已用内联 onclick，确保缓存旧脚本也能点开）
     $("#rank-list").addEventListener("click", (e) => { const it = e.target.closest(".rank-item"); if (it) openModal(+it.dataset.id); });
     $("#top5").addEventListener("click", (e) => { const it = e.target.closest(".rank-item"); if (it) openModal(+it.dataset.id); });
     $("#modal-mask").addEventListener("click", (e) => { if (e.target.id === "modal-mask") closeModal(); });
