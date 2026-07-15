@@ -127,6 +127,8 @@
     ["#featured-carousel", "#picks-grid"].forEach(sel => { bindTilt($(sel)); bindRipple($(sel)); });
 
     renderCoverMarquee();
+    // 首页右侧公告栏
+    if (window.Community) Community.renderAnnouncement($("#announce-panel"));
   }
 
   // 首页「热门番剧」封面滚动播放：从「本周放送表」(当前季度 + 有放送日 + 日本动画) 随机抽若干部，
