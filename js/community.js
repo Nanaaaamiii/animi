@@ -491,7 +491,7 @@
   /* ---------------- 共享收藏 / 评分（替代 localStorage） ---------------- */
   async function renderCollectBox(a, box) {
     let coll = null;
-    if (USER) { const { data } = await sb.from("collections").select("*").eq("user_id", USER.id).eq("anime_id", a.id).single(); coll = data; }
+    if (USER) { const { data } = await sb.from("collections").select("*").eq("user_id", USER.id).eq("anime_id", a.id).maybeSingle(); coll = data; }
     const st = coll ? coll.status : "";
     const rt = coll ? (coll.rating || 0) : 0;
     const cm = coll ? (coll.note || "") : "";
@@ -513,7 +513,10 @@
       if (!USER) { openIdentity(); return; }
       const activeSt = $(".st-btn.active", box); const curSt = activeSt ? activeSt.dataset.st : "want";
       const curRt = $$(".star.on", sinput).length; const curCm = $("#comment-input", box).value;
-      const { error } = await sb.from("collections").upsert({ user_id: USER.id, anime_id: a.id, status: curSt, rating: curRt, note: curCm });
+      const { error } = await sb.from("collections").upsert(
+        { user_id: USER.id, anime_id: a.id, status: curSt, rating: curRt || null, note: curCm },
+        { onConflict: "user_id,anime_id" }
+      );
       if (error) { toast("保存失败：" + error.message); return; }
       toast("已保存"); if ($("#view-mine") && !$("#view-mine").classList.contains("hidden")) renderMine();
     };
