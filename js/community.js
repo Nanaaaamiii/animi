@@ -324,7 +324,7 @@
       const b = $("#forum-login", wrap); if (b) b.onclick = openIdentity; return;
     }
     wrap.innerHTML = `<div class="loading">加载中…</div>`;
-    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id").order("created_at", { ascending: false }).limit(50);
+    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id,views").order("created_at", { ascending: false }).limit(50);
     if (error) { wrap.innerHTML = `<div class="err">加载失败：${esc(error.message)}</div>`; return; }
     if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有帖子，点右上角「＋ 发帖」抢沙发吧～</div>`; return; }
     const ids = [...new Set(data.map(p => p.user_id))];
@@ -336,7 +336,7 @@
         <div class="post-main">
           <div class="post-title">${esc(p.title)}</div>
           <div class="post-body">${esc(p.body)}</div>
-          <div class="post-meta"><span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span><span>@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>💬 ${cnt[p.id] || 0}</span></div>
+          <div class="post-meta"><span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span><span>@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
         </div>
       </div>`).join("");
     $$(".post-card", wrap).forEach(c => c.onclick = () => openPost(c.dataset.id));
@@ -354,6 +354,8 @@
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
     const { data: post } = await sb.from("forum_posts").select("title,body,created_at,user_id").eq("id", id).single();
     if (!post) { modal.innerHTML = `<div class="err">帖子不存在</div>`; return; }
+    const { data: vres } = await sb.rpc("inc_post_view", { p_id: id });
+    const views = (vres && vres[0] && vres[0].inc_post_view) || post.views || 0;
     const names = await fetchNames([post.user_id]);
     const { data: comments } = await sb.from("forum_comments").select("id,body,created_at,user_id").eq("post_id", id).order("created_at", { ascending: true });
     currentPostId = id;
@@ -362,7 +364,7 @@
       <div class="comm-post">
         <div class="post-title">${esc(post.title)}</div>
         <div class="post-body" style="white-space:pre-wrap">${esc(post.body)}</div>
-        <div class="post-meta"><span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span><span>@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span></div>
+        <div class="post-meta"><span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span><span>@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
       </div>
       <div class="comm-divider">评论 ${comments ? comments.length : 0}</div>
       <div id="comment-list" class="comment-list">${comments && comments.length ? comments.map(c => commentHTML(c, names[c.user_id])).join("") : `<div class="empty">还没有评论</div>`}</div>
@@ -605,19 +607,38 @@
     if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有人对番剧发表评价，<button class="btn btn-primary" id="rv-empty-new" style="padding:8px 18px;margin-top:8px">去发第一条</button>～</div>`; const be = $("#rv-empty-new", wrap); if (be) be.onclick = openReviewComposer; return; }
     const ids = [...new Set(data.map(c => c.user_id))];
     const names = await fetchNames(ids);
+    // 取每部番的「我的评分」用于评价卡片展示评分
+    const animeIds = [...new Set(data.map(c => c.anime_id))];
+    const { data: colls } = await sb.from("collections").select("anime_id,rating").in("anime_id", animeIds);
+    const ratings = {}; (colls || []).forEach(x => { if (x.rating) ratings[x.anime_id] = x.rating; });
     wrap.innerHTML = (USER ? `<button class="btn btn-primary" id="rv-new" style="padding:9px 20px;margin-bottom:12px">＋ 发评价（可带图）</button>` : "") + data.map(c => {
       const a = window.ANIME_DATA.find(x => x.id === c.anime_id);
       const prof = names[c.user_id]; const name = (prof && prof.username) || "用户";
+      const rt = ratings[c.anime_id];
+      const stars = rt ? "★".repeat(rt) + "☆".repeat(10 - rt) : "";
       return `<div class="review-card" data-anime="${c.anime_id}">
         <div class="rv-head"><span class="c-av">${avatarHTML(prof, c.user_id, "xs")}</span><span class="rv-name">@${esc(name)}</span>${uidTag(prof)}<span class="c-time">${timeAgo(c.created_at)}</span></div>
         <div class="rv-anime">📺 ${esc(a ? a.title : "未知番剧")}</div>
+        ${rt ? `<div class="rv-score">我的评分：<b style="color:#ffce3d">${stars}</b> ${rt}/10</div>` : ""}
         ${c.body ? `<div class="rv-body">${esc(c.body)}</div>` : ""}
         ${imagesHTML(c.images)}
+        <button class="rv-comment-btn" data-anime="${c.anime_id}">💬 评论 (${a ? (a.title) : ""})</button>
       </div>`;
     }).join("");
-    $$(".review-card", wrap).forEach(card => card.onclick = () => {
-      closeComm();
-      if (window.openModal) window.openModal(+card.dataset.anime);
+    $$(".review-card", wrap).forEach(card => {
+      // 点「评论」按钮 → 打开该番的讨论区（别人可在此楼中楼回复）
+      const cb = card.querySelector(".rv-comment-btn");
+      if (cb) cb.onclick = (e) => {
+        e.stopPropagation();
+        const aid = +cb.dataset.anime;
+        const t = (window.ANIME_DATA.find(x => x.id === aid) || {}).title || ("动画 #" + aid);
+        closeComm();
+        openAnimeDiscussion(aid, t);
+      };
+      // 点卡片其它区域 → 打开番剧详情页
+      card.onclick = () => {
+        if (window.openModal) { closeComm(); window.openModal(+card.dataset.anime); }
+      };
     });
     const rvNew = $("#rv-new", wrap); if (rvNew) rvNew.onclick = openReviewComposer;
   }
