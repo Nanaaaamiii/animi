@@ -60,6 +60,20 @@
     t.textContent = msg; t.classList.add("show"); clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove("show"), 1600);
   }
 
+  // 图片大图查看（点击评论配图触发）
+  window.__cbLightbox = function (url) {
+    let box = document.getElementById("cb-lightbox");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "cb-lightbox"; box.className = "cb-lightbox";
+      box.innerHTML = `<img alt="大图">`;
+      box.onclick = () => box.classList.remove("open");
+      document.body.appendChild(box);
+    }
+    box.querySelector("img").src = url;
+    box.classList.add("open");
+  };
+
   async function init() {
     if (typeof supabase === "undefined") { console.warn("supabase-js 未加载"); return; }
     try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
@@ -95,6 +109,19 @@
     });
     if (error) throw error;
     const { data } = sb.storage.from("avatars").getPublicUrl(path);
+    return data.publicUrl;
+  }
+
+  // 上传评论配图到 Supabase Storage（comments 桶，按 uid/时间戳 命名，避免覆盖）
+  async function uploadCommentImage(file) {
+    if (!USER) throw new Error("未登录");
+    const ext = (file.name && file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `${USER.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await sb.storage.from("comments").upload(path, file, {
+      cacheControl: "3600", upsert: false, contentType: file.type || "image/jpeg"
+    });
+    if (error) throw error;
+    const { data } = sb.storage.from("comments").getPublicUrl(path);
     return data.publicUrl;
   }
 
@@ -410,10 +437,18 @@
     const replies = (c._replies || []).map(r => commentHTML(r, profile, depth + 1)).join("");
     return `<div class="comment-item${mine ? " mine" : ""}${depth ? " reply" : ""}">
       <div class="c-head"><span class="c-av">${avatarHTML(profile, c.user_id, "xs")}</span><span class="c-name">@${esc(name)}</span>${uidTag(profile)}<span class="c-time">${timeAgo(c.created_at)}</span>${mine ? `<button class="c-del" data-id="${c.id}">删除</button>` : ""}</div>
-      <div class="c-body">${esc(c.body)}</div>
+      ${c.body ? `<div class="c-body">${esc(c.body)}</div>` : ""}
+      ${imagesHTML(c.images)}
       <div class="c-actions"><button class="c-reply" data-id="${c.id}" data-name="${esc(name)}">回复</button></div>
       ${replies ? `<div class="c-replies">${replies}</div>` : ""}
     </div>`;
+  }
+
+  // 渲染评论配图（数组），点击可在弹层查看大图
+  function imagesHTML(images) {
+    if (!Array.isArray(images) || !images.length) return "";
+    const items = images.map(u => `<img class="c-img" src="${esc(u)}" alt="配图" loading="lazy" onclick="window.__cbLightbox && window.__cbLightbox('${esc(u)}')">`).join("");
+    return `<div class="c-imgs">${items}</div>`;
   }
 
   async function openAnimeDiscussion(animeId, title) {
@@ -421,7 +456,7 @@
     modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="loading">加载中…</div>`;
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
     currentAnimeId = animeId; currentReplyTo = null;
-    const { data: comments } = await sb.from("anime_comments").select("id,anime_id,user_id,body,created_at,parent_id").eq("anime_id", animeId).order("created_at", { ascending: true });
+    const { data: comments } = await sb.from("anime_comments").select("id,anime_id,user_id,body,created_at,parent_id,images").eq("anime_id", animeId).order("created_at", { ascending: true });
     const ids = [...new Set((comments || []).map(c => c.user_id))];
     const names = await fetchNames(ids);
     const tree = buildTree(comments);
@@ -431,10 +466,40 @@
       <div id="anime-comment-list" class="comment-list">${tree.length ? tree.map(c => commentHTML(c, names[c.user_id])).join("") : `<div class="empty">还没有人讨论这部，来当第一个～</div>`}</div>
       <div class="reply-hint hidden" id="reply-hint"></div>
       <div class="comment-form">
-        <textarea id="ac-input" class="cb-textarea" placeholder="${USER ? "说点什么…（支持楼中楼回复）" : "登录后即可发言"}"></textarea>
-        <button class="btn btn-primary" id="ac-send" style="justify-content:center">${USER ? "发送" : "登录"}</button>
+        <textarea id="ac-input" class="cb-textarea" placeholder="${USER ? "说点什么…（支持楼中楼回复、插入图片）" : "登录后即可发言"}"></textarea>
+        <div class="ac-thumbs" id="ac-thumbs"></div>
+        <div class="ac-bar">
+          <label class="ac-imgbtn" title="插入图片">🖼️ 图片
+            <input type="file" id="ac-file" accept="image/*" multiple hidden>
+          </label>
+          <button class="btn btn-primary" id="ac-send" style="justify-content:center">${USER ? "发送" : "登录"}</button>
+        </div>
       </div>`;
     $("#comm-close").onclick = closeComm;
+    // 待上传图片队列（本地 File 对象）
+    let pendingImgs = [];
+    const thumbsEl = $("#ac-thumbs");
+    function renderThumbs() {
+      if (!thumbsEl) return;
+      thumbsEl.innerHTML = pendingImgs.map((f, i) =>
+        `<div class="ac-thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="ac-thumb-x" data-i="${i}">✕</button></div>`
+      ).join("");
+      thumbsEl.querySelectorAll(".ac-thumb-x").forEach(b => b.onclick = () => {
+        pendingImgs.splice(+b.dataset.i, 1); renderThumbs();
+      });
+    }
+    const fileInput = $("#ac-file");
+    if (fileInput) fileInput.addEventListener("change", () => {
+      if (!USER) { openIdentity(); return; }
+      const files = [...(fileInput.files || [])];
+      for (const f of files) {
+        if (!f.type.startsWith("image/")) { toast("只能插入图片"); continue; }
+        if (f.size > 5 * 1024 * 1024) { toast("单张图片不能超过 5MB"); continue; }
+        if (pendingImgs.length >= 6) { toast("最多插入 6 张图片"); break; }
+        pendingImgs.push(f);
+      }
+      fileInput.value = ""; renderThumbs();
+    });
     const list = $("#anime-comment-list");
     if (list) list.addEventListener("click", async (e) => {
       const del = e.target.closest(".c-del");
@@ -450,13 +515,30 @@
     });
     $("#ac-send").onclick = async () => {
       if (!USER) { openIdentity(); return; }
-      const v = $("#ac-input").value.trim(); if (!v) return;
-      const row = { anime_id: animeId, user_id: USER.id, body: v };
-      if (currentReplyTo) row.parent_id = currentReplyTo;
-      const { error } = await sb.from("anime_comments").insert(row);
-      if (error) { toast("发送失败：" + error.message); return; }
-      $("#ac-input").value = ""; currentReplyTo = null; $("#reply-hint").classList.add("hidden");
-      await awardExp(2); openAnimeDiscussion(animeId, title);
+      const v = $("#ac-input").value.trim();
+      if (!v && !pendingImgs.length) return;
+      const sendBtn = $("#ac-send");
+      sendBtn.disabled = true;
+      const oldTxt = sendBtn.textContent;
+      try {
+        let imgUrls = [];
+        if (pendingImgs.length) {
+          sendBtn.textContent = "上传中…";
+          imgUrls = await Promise.all(pendingImgs.map(f => uploadCommentImage(f)));
+        }
+        const row = { anime_id: animeId, user_id: USER.id, body: v };
+        if (imgUrls.length) row.images = imgUrls;
+        if (currentReplyTo) row.parent_id = currentReplyTo;
+        const { error } = await sb.from("anime_comments").insert(row);
+        if (error) { toast("发送失败：" + error.message); return; }
+        $("#ac-input").value = ""; pendingImgs = []; currentReplyTo = null;
+        $("#reply-hint").classList.add("hidden");
+        await awardExp(2); openAnimeDiscussion(animeId, title);
+      } catch (e) {
+        toast("图片上传失败：" + (e.message || e));
+      } finally {
+        sendBtn.disabled = false; sendBtn.textContent = oldTxt;
+      }
     };
   }
 
@@ -466,7 +548,7 @@
     if (!sb) { wrap.innerHTML = `<div class="empty">社区模块未初始化。</div>`; return; }
     wrap.innerHTML = `<div class="loading">加载中…</div>`;
     const { data, error } = await sb.from("anime_comments")
-      .select("id,anime_id,user_id,body,created_at,parent_id")
+      .select("id,anime_id,user_id,body,created_at,parent_id,images")
       .is("parent_id", null)
       .order("created_at", { ascending: false }).limit(80);
     if (error) { wrap.innerHTML = `<div class="err">加载失败：${esc(error.message)}</div>`; return; }
@@ -479,7 +561,8 @@
       return `<div class="review-card" data-anime="${c.anime_id}">
         <div class="rv-head"><span class="c-av">${avatarHTML(prof, c.user_id, "xs")}</span><span class="rv-name">@${esc(name)}</span>${uidTag(prof)}<span class="c-time">${timeAgo(c.created_at)}</span></div>
         <div class="rv-anime">📺 ${esc(a ? a.title : "未知番剧")}</div>
-        <div class="rv-body">${esc(c.body)}</div>
+        ${c.body ? `<div class="rv-body">${esc(c.body)}</div>` : ""}
+        ${imagesHTML(c.images)}
       </div>`;
     }).join("");
     $$(".review-card", wrap).forEach(card => card.onclick = () => {
