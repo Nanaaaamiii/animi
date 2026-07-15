@@ -1498,10 +1498,146 @@
     host.scrollTop = host.scrollHeight;
   }
 
+  /* ---------------- 首页公告栏 ---------------- */
+  // 渲染首页右侧公告栏：拉取最新启用的公告，站长/管理员显示编辑按钮
+  function renderAnnouncement(panel) {
+    if (!panel || !sb) { panel.innerHTML = '<div class="announce-empty">暂无公告</div>'; return; }
+    // 先清空 loading
+    panel.innerHTML = "";
+    sb.from("announcements").select("*").eq("is_active", true).order("updated_at", { ascending: false }).limit(1)
+      .maybeSingle().then(async row => {
+        if (!row) {
+          panel.innerHTML = `<div class="announce-card"><div class="ac-head"><span class="ac-title">📢 公告</span></div>
+            <div class="ac-body">暂无公告</div>${isAdmin() ? '<button class="ac-edit-btn" id="ac-edit-btn">编辑</button>' : ''}</div>`;
+          bindAcEdit(); return;
+        }
+        let imgHtml = "";
+        if (row.image_url) {
+          imgHtml = `<img class="ac-img" src="${row.image_url}" alt="公告图片" onclick="if(window.__cbLightbox)__cbLightbox('${row.image_url}')" />`;
+        }
+        const timeStr = row.updated_at ? new Date(row.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+        panel.innerHTML = `<div class="announce-card">
+          <div class="ac-head"><span class="ac-title">📢 公告</span>${isAdmin() ? '<button class="ac-edit-btn" id="ac-edit-btn">编辑</button>' : ''}</div>
+          ${imgHtml}
+          <div class="ac-body">${esc(row.content || "")}</div>
+          <div class="ac-time">${timeStr}</div>
+        </div>`;
+        bindAcEdit();
+      }).catch(() => {
+        panel.innerHTML = '<div class="announce-empty">加载失败，请刷新重试</div>';
+      });
+  }
+
+  // 绑定公告编辑按钮
+  function bindAcEdit() {
+    const btn = document.getElementById("ac-edit-btn");
+    if (btn) btn.onclick = () => openAnnouncementEditor();
+  }
+
+  // 打开公告编辑弹窗（仅管理员/站长可调用）
+  async function openAnnouncementEditor() {
+    if (!isAdmin()) return;
+    const existing = await sb.from("announcements").select("*").eq("is_active", true).order("updated_at", { ascending: false }).limit(1).maybeSingle().catch(() => null);
+    const content = existing ? (existing.content || "") : "";
+    const imgUrl = existing ? (existing.image_url || "") : "";
+
+    const overlay = document.createElement("div");
+    overlay.className = "ann-editor-overlay";
+    overlay.id = "ann-ov";
+    overlay.onclick = e => { if (e.target === overlay) closeAnnEditor(); };
+    overlay.innerHTML = `
+      <div class="ann-editor" onclick="event.stopPropagation()">
+        <h3>📢 编辑公告</h3>
+        <label>公告内容（支持文字）</label>
+        <textarea id="ann-text" placeholder="输入公告内容…">${esc(content)}</textarea>
+        <label>公告图片（选填）</label>
+        <div class="ann-img-row">
+          <input type="file" id="ann-file" accept="image/*" />
+          ${imgUrl ? `<button type="button" class="btn btn-ghost" id="ann-rm-img" style="font-size:12px;padding:4px 8px;">删除图片</button>` : ""}
+        </div>
+        ${imgUrl ? `<img class="ann-img-preview" id="ann-preview" src="${imgUrl}" style="display:block" />` : '<img class="ann-img-preview" id="ann-preview" />'}
+        <div class="ann-actions">
+          <button class="btn btn-ghost" id="ann-cancel">取消</button>
+          <button class="btn btn-primary" id="ann-save">保存公告</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    // 图片预览
+    const fileInput = document.getElementById("ann-file");
+    const preview = document.getElementById("ann-preview");
+    fileInput.onchange = () => {
+      if (fileInput.files[0]) {
+        preview.src = URL.createObjectURL(fileInput.files[0]);
+        preview.style.display = "block";
+      }
+    };
+    const rmBtn = document.getElementById("ann-rm-img");
+    if (rmBtn) rmBtn.onclick = () => { preview.src = ""; preview.style.display = "none"; fileInput.value = ""; };
+
+    document.getElementById("ann-cancel").onclick = closeAnnEditor;
+    document.getElementById("ann-save").onclick = () => saveAnnouncement(existing);
+  }
+
+  // 关闭编辑器
+  function closeAnnEditor() {
+    const ov = document.getElementById("ann-ov");
+    if (ov) ov.remove();
+  }
+
+  // 保存公告
+  async function saveAnnouncement(existing) {
+    const textEl = document.getElementById("ann-text");
+    const fileEl = document.getElementById("ann-file");
+    const preview = document.getElementById("ann-preview");
+    const saveBtn = document.getElementById("ann-save");
+
+    let imgUrl = existing ? (existing.image_url || "") : "";
+
+    // 如果有新图片，先上传
+    if (fileEl && fileEl.files[0]) {
+      saveBtn.textContent = "上传中…"; saveBtn.disabled = true;
+      try {
+        imgUrl = await uploadCommentImage(fileEl.files[0]);
+      } catch (e) { toast("图片上传失败：" + (e.message || e)); saveBtn.textContent = "保存公告"; saveBtn.disabled = false; return; }
+    } else if (preview && (!preview.src || preview.src.startsWith("blob:"))) {
+      // 用户选了图但还没确认上传，或原图被删了
+      // 如果有 blob URL 说明用户选了新图但 uploadCommentImage 没走通
+      if (!existing || !existing.image_url) imgUrl = "";
+    }
+    // 检查是否有"删除图片"操作：如果 rm 按钮被点了且没有新图
+    const rmBtn = document.getElementById("ann-rm-img");
+    if (!rmBtn && !fileEl?.files[0] && preview && !preview.src) {
+      imgUrl = ""; // 原图被删除且没上传新的
+    }
+
+    const bodyText = textEl.value.trim();
+
+    saveBtn.textContent = "保存中…";
+    try {
+      if (existing && existing.id) {
+        await sb.from("announcements").update({ content: bodyText, image_url: imgUrl, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+      } else {
+        await sb.from("announcements").insert({
+          content: bodyText, image_url: imgUrl, is_active: true,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+        });
+      }
+      toast("公告已保存 ✅");
+      closeAnnEditor();
+      renderAnnouncement(document.getElementById("announce-panel"));
+    } catch (e) {
+      toast("保存失败：" + (e.message || e));
+      saveBtn.textContent = "保存公告"; saveBtn.disabled = false;
+    }
+  }
+
   /* ---------------- 导出 ---------------- */
   window.Community = {
     init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum, openReviewComposer,
-    searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot
+    searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot,
+    renderAnnouncement
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
