@@ -674,6 +674,10 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 
 .game-card-setup{max-width:760px;margin:6px auto 0;background:var(--card);border:1px solid var(--border,#eee);
   border-radius:20px;padding:26px 24px;box-shadow:var(--shadow);}
+.game-play-head{max-width:760px;margin:6px auto 0;}
+.game-play-rules{font-size:15px;line-height:1.7;color:var(--text);background:var(--card);border:1px solid var(--border,#eee);
+  border-left:4px solid var(--accent);border-radius:14px;padding:14px 18px;margin:0 0 18px;box-shadow:var(--shadow);}
+.game-play-rules b{color:var(--accent);}
 .game-lead{font-size:15px;line-height:1.7;color:var(--text);margin:0 0 20px;}
 .game-lead b{color:var(--accent);}
 .game-setup-row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;}
