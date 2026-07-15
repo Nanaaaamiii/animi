@@ -102,7 +102,17 @@
     bindCommunityUI();
     setupRealtime();
     await ensureSession();
-    if ($("#view-community") && !$("#view-community").classList.contains("hidden")) renderForum();
+    // 登录态（含 role 身份）加载完成后，补订阅私信通道 + 重新渲染首页公告栏，
+    // 确保站长/管理员能在身份就绪后看到「编辑」按钮
+    setupRealtime();
+    renderAnnouncement(document.getElementById("announce-panel"));
+    // 登录 / 登出时同步刷新公告栏的编辑权限与实时通道
+    try {
+      sb.auth.onAuthStateChange(() => {
+        setupRealtime();
+        renderAnnouncement(document.getElementById("announce-panel"));
+      });
+    } catch (e) { /* 忽略 */ }    if ($("#view-community") && !$("#view-community").classList.contains("hidden")) renderForum();
   }
 
   async function ensureSession() {
