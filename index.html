@@ -49,9 +49,6 @@
         <canvas class="hero-canvas" id="hero-canvas"></canvas>
         <div class="wrap hero-inner">
           <div class="hero-badge fade-in-down"><span class="dot"></span> 发现 · 收藏 · 追番，一站搞定</div>
-          <h1 class="fade-in-up">
-            找到属于你的<span class="grad">下一部神番</span>
-          </h1>
           <p class="hero-sub fade-in-up"><span class="tw" id="hero-tw"></span></p>
           <div class="hero-actions fade-in-up">
             <a href="#" class="btn btn-primary magnetic to-browse">开始探索 →</a>
@@ -59,12 +56,21 @@
           </div>
           <div class="hero-stats fade-in-up">
             <div class="stat"><div class="num" id="stat-count">0</div><div class="lbl">收录作品</div></div>
-            <div class="stat"><div class="num" id="stat-avg">0</div><div class="lbl">平均评分</div></div>
-            <div class="stat"><div class="num" id="stat-season">0</div><div class="lbl">高分番剧 7★+</div></div>
           </div>
         </div>
         <div class="hero-float f1" style="background:linear-gradient(135deg,#ff9a9e,#f6416c)"></div>
         <div class="hero-float f2" style="background:linear-gradient(135deg,#a18cd1,#fbc2eb)"></div>
+      </div>
+
+      <!-- 热门番剧 封面滚动播放 -->
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>热门番剧</div>
+            <div class="section-desc">每日精选 · 封面自动滚动（点封面看详情）</div>
+          </div>
+        </div>
+        <div class="cover-marquee" id="cover-marquee"><div class="cover-track" id="cover-track"></div></div>
       </div>
 
       <!-- 本季新番 横向轮播 -->
@@ -137,6 +143,7 @@
           <div class="filter-group">
             <span class="filter-label">排序</span>
             <div id="season-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            <button class="f-chip dir-btn" id="sort-dir" title="切换升序 / 降序">↓ 降序</button>
           </div>
           <div class="filter-group">
             <span class="filter-label">类型</span>
