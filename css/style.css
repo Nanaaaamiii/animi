@@ -608,7 +608,13 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .cover-cell:hover .cover-img { transform: translateY(-6px) scale(1.04); box-shadow: 0 14px 30px rgba(225,100,140,.32); }
 .cover-cap { margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--text-soft);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cover-rating { margin-top: 2px; font-size: 12px; font-weight: 700; color: var(--gold);
+  display: flex; align-items: center; gap: 3px; }
+.cover-rating svg { width: 12px; height: 12px; fill: var(--gold); }
 @keyframes cover-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* 首页公告区：预留，默认隐藏（hidden），将来填充公告图片并限定管理员/站长编辑 */
+.announce-zone { position: absolute; right: 4%; top: 16%; z-index: 2; max-width: 220px; }
 
 /* 排序方向切换按钮 */
 .dir-btn { margin-left: 4px; }
