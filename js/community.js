@@ -1539,8 +1539,8 @@
         const timeStr = row.updated_at ? new Date(row.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
         panel.innerHTML = `<div class="announce-card">
           <div class="ac-head"><span class="ac-title">📢 公告</span>${isAdmin() ? '<button class="ac-edit-btn" id="ac-edit-btn">编辑</button>' : ''}</div>
-          ${imgHtml}
           <div class="ac-body">${esc(row.content || "")}</div>
+          ${imgHtml}
           <div class="ac-time">${timeStr}</div>
         </div>`;
         bindAcEdit();
@@ -1696,8 +1696,8 @@
     panel.style.right = "4%";
     panel.style.left = "auto";
     panel.style.top = "84px";
-    panel.style.width = "260px";
-    panel.style.height = "380px";
+    panel.style.width = "380px";
+    panel.style.height = "520px";
     if (isAdmin() && sb && ANN_CURRENT_ID) {
       try { await sb.from("announcements").update({ pos_x: null, pos_y: null, width: null, height: null }).eq("id", ANN_CURRENT_ID); }
       catch (e) { console.warn("重置公告布局失败", e); }

@@ -257,7 +257,7 @@ header.nav {
 #view-home { position: relative; }
 
 /* 首页公告栏（位于 #view-home 内，可拖动 / 缩放） */
-.announce-panel { position: absolute; right: 4%; top: 84px; z-index: 30; width: 260px; height: 380px;
+.announce-panel { position: absolute; right: 4%; top: 84px; z-index: 30; width: 380px; height: 520px;
   max-height: none; overflow: auto; box-sizing: border-box; resize: both;
   box-shadow: 0 10px 30px rgba(0,0,0,.18); }
 .announce-panel.dragging { user-select: none; opacity: .92; }
@@ -273,8 +273,8 @@ header.nav {
 .announce-reset { font-size: 11px; color: var(--text-faint); cursor: pointer; margin-top: 4px; display: inline-block; }
 .announce-reset:hover { color: var(--primary); }
 .announce-card .ac-edit-btn:hover { color: var(--primary); border-color: var(--primary); }
-.announce-card .ac-body { font-size: 13.5px; line-height: 1.7; color: var(--text-soft); word-break: break-word; white-space: pre-wrap; margin-bottom: 10px; }
-.announce-card .ac-img { width: 100%; border-radius: 10px; margin-bottom: 12px; object-fit: cover; max-height: 200px;
+.announce-card .ac-body { font-size: 16px; line-height: 1.7; color: var(--text-soft); word-break: break-word; white-space: pre-wrap; margin-bottom: 12px; font-weight: 600; }
+.announce-card .ac-img { width: 100%; border-radius: 10px; margin-top: 8px; display: block;
   cursor: pointer; transition: transform .25s; }
 .announce-card .ac-img:hover { transform: scale(1.03); }
 .announce-card .ac-time { font-size: 11px; color: var(--text-faint); text-align: right; opacity: .7; }
