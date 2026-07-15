@@ -465,40 +465,17 @@
       <div class="comm-title">💬 讨论：${esc(title || ("动画 #" + animeId))}</div>
       <div id="anime-comment-list" class="comment-list">${tree.length ? tree.map(c => commentHTML(c, names[c.user_id])).join("") : `<div class="empty">还没有人讨论这部，来当第一个～</div>`}</div>
       <div class="reply-hint hidden" id="reply-hint"></div>
-      <div class="comment-form">
-        <textarea id="ac-input" class="cb-textarea" placeholder="${USER ? "说点什么…（支持楼中楼回复、插入图片）" : "登录后即可发言"}"></textarea>
-        <div class="ac-thumbs" id="ac-thumbs"></div>
-        <div class="ac-bar">
-          <label class="ac-imgbtn" title="插入图片">🖼️ 图片
-            <input type="file" id="ac-file" accept="image/*" multiple hidden>
-          </label>
-          <button class="btn btn-primary" id="ac-send" style="justify-content:center">${USER ? "发送" : "登录"}</button>
-        </div>
-      </div>`;
+      ${commentComposerHTML("ac")}`;
     $("#comm-close").onclick = closeComm;
-    // 待上传图片队列（本地 File 对象）
-    let pendingImgs = [];
-    const thumbsEl = $("#ac-thumbs");
-    function renderThumbs() {
-      if (!thumbsEl) return;
-      thumbsEl.innerHTML = pendingImgs.map((f, i) =>
-        `<div class="ac-thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="ac-thumb-x" data-i="${i}">✕</button></div>`
-      ).join("");
-      thumbsEl.querySelectorAll(".ac-thumb-x").forEach(b => b.onclick = () => {
-        pendingImgs.splice(+b.dataset.i, 1); renderThumbs();
-      });
-    }
-    const fileInput = $("#ac-file");
-    if (fileInput) fileInput.addEventListener("change", () => {
-      if (!USER) { openIdentity(); return; }
-      const files = [...(fileInput.files || [])];
-      for (const f of files) {
-        if (!f.type.startsWith("image/")) { toast("只能插入图片"); continue; }
-        if (f.size > 5 * 1024 * 1024) { toast("单张图片不能超过 5MB"); continue; }
-        if (pendingImgs.length >= 6) { toast("最多插入 6 张图片"); break; }
-        pendingImgs.push(f);
-      }
-      fileInput.value = ""; renderThumbs();
+    initCommentComposer("ac", async (body, images) => {
+      const row = { anime_id: animeId, user_id: USER.id, body };
+      if (images.length) row.images = images;
+      if (currentReplyTo) row.parent_id = currentReplyTo;
+      const { error } = await sb.from("anime_comments").insert(row);
+      if (error) { toast("发送失败：" + error.message); return false; }
+      await awardExp(2);
+      openAnimeDiscussion(animeId, title);
+      return true;
     });
     const list = $("#anime-comment-list");
     if (list) list.addEventListener("click", async (e) => {
@@ -513,33 +490,106 @@
         $("#ac-input").focus();
       }
     });
-    $("#ac-send").onclick = async () => {
+  }
+
+  /* ---------------- 可复用图文评论器（讨论弹窗 & 社区发评价共用） ---------------- */
+  function commentComposerHTML(prefix) {
+    return `<div class="comment-form" id="${prefix}-form">
+      <textarea id="${prefix}-input" class="cb-textarea" placeholder="说点什么…（支持插入图片）"></textarea>
+      <div class="ac-thumbs" id="${prefix}-thumbs"></div>
+      <div class="ac-bar">
+        <label class="ac-imgbtn" title="插入图片">🖼️ 图片
+          <input type="file" id="${prefix}-file" accept="image/*" multiple hidden>
+        </label>
+        <button class="btn btn-primary" id="${prefix}-send" style="justify-content:center">发送</button>
+      </div>
+    </div>`;
+  }
+
+  function initCommentComposer(prefix, onSend) {
+    let pendingImgs = [];
+    const thumbsEl = $("#" + prefix + "-thumbs");
+    const sendBtn = $("#" + prefix + "-send");
+    const fileInput = $("#" + prefix + "-file");
+    function renderThumbs() {
+      if (!thumbsEl) return;
+      thumbsEl.innerHTML = pendingImgs.map((f, i) =>
+        `<div class="ac-thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="ac-thumb-x" data-i="${i}">✕</button></div>`
+      ).join("");
+      thumbsEl.querySelectorAll(".ac-thumb-x").forEach(b => b.onclick = () => { pendingImgs.splice(+b.dataset.i, 1); renderThumbs(); });
+    }
+    if (fileInput) fileInput.addEventListener("change", () => {
+      const files = [...(fileInput.files || [])];
+      for (const f of files) {
+        if (!f.type.startsWith("image/")) { toast("只能插入图片"); continue; }
+        if (f.size > 5 * 1024 * 1024) { toast("单张图片不能超过 5MB"); continue; }
+        if (pendingImgs.length >= 6) { toast("最多插入 6 张图片"); break; }
+        pendingImgs.push(f);
+      }
+      fileInput.value = ""; renderThumbs();
+    });
+    if (sendBtn) sendBtn.onclick = async () => {
+      const v = $("#" + prefix + "-input").value.trim();
       if (!USER) { openIdentity(); return; }
-      const v = $("#ac-input").value.trim();
       if (!v && !pendingImgs.length) return;
-      const sendBtn = $("#ac-send");
       sendBtn.disabled = true;
       const oldTxt = sendBtn.textContent;
       try {
         let imgUrls = [];
         if (pendingImgs.length) {
           sendBtn.textContent = "上传中…";
-          imgUrls = await Promise.all(pendingImgs.map(f => uploadCommentImage(f)));
+          imgUrls = []; for (const f of pendingImgs) imgUrls.push(await uploadCommentImage(f));
         }
-        const row = { anime_id: animeId, user_id: USER.id, body: v };
-        if (imgUrls.length) row.images = imgUrls;
-        if (currentReplyTo) row.parent_id = currentReplyTo;
-        const { error } = await sb.from("anime_comments").insert(row);
-        if (error) { toast("发送失败：" + error.message); return; }
-        $("#ac-input").value = ""; pendingImgs = []; currentReplyTo = null;
-        $("#reply-hint").classList.add("hidden");
-        await awardExp(2); openAnimeDiscussion(animeId, title);
+        const ok = await onSend(v, imgUrls);
+        if (ok) { $("#" + prefix + "-input").value = ""; pendingImgs = []; renderThumbs(); }
       } catch (e) {
         toast("图片上传失败：" + (e.message || e));
       } finally {
         sendBtn.disabled = false; sendBtn.textContent = oldTxt;
       }
     };
+  }
+
+  /* ---------------- 社区页「发评价」弹窗（含番剧搜索选择） ---------------- */
+  async function openReviewComposer() {
+    const mask = $("#comm-mask"), modal = $("#comm-modal");
+    if (!USER) { openIdentity(); return; }
+    modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button>
+      <div class="comm-title">✍️ 发表番剧评价</div>
+      <div class="rv-picker">
+        <input id="rv-search" class="cb-input" placeholder="🔍 先搜索并选择一部番剧…" autocomplete="off">
+        <div id="rv-results" class="rv-results"></div>
+        <div id="rv-chosen" class="rv-chosen hidden"></div>
+      </div>
+      <div id="rv-composer-host"></div>`;
+    $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
+    const search = $("#rv-search"), results = $("#rv-results"), chosen = $("#rv-chosen"), host = $("#rv-composer-host");
+    let selected = null;
+    function choose(a) {
+      selected = a; chosen.innerHTML = `已选择：📺 <b>${esc(a.title)}</b> <button class="ac-thumb-x" id="rv-clear" style="position:static;display:inline-flex">✕</button>`;
+      chosen.classList.remove("hidden"); search.classList.add("hidden"); results.innerHTML = "";
+      $("#rv-clear").onclick = () => { selected = null; chosen.classList.add("hidden"); search.classList.remove("hidden"); search.value = ""; search.focus(); };
+      host.innerHTML = commentComposerHTML("rv");
+      initCommentComposer("rv", async (body, images) => {
+        const row = { anime_id: selected.id, user_id: USER.id, body };
+        if (images.length) row.images = images;
+        const { error } = await sb.from("anime_comments").insert(row);
+        if (error) { toast("发布失败：" + error.message); return false; }
+        await awardExp(5); toast("已发布 +5 EXP");
+        closeComm(); await renderAnimeReviews();
+        return true;
+      });
+    }
+    search.addEventListener("input", () => {
+      const q = search.value.trim();
+      if (!q) { results.innerHTML = ""; return; }
+      const all = window.ANIME_DATA || [];
+      const hit = all.filter(x => (x.title || "").toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+      results.innerHTML = hit.length
+        ? hit.map(a => `<div class="rv-opt" data-id="${a.id}">${esc(a.title)}</div>`).join("")
+        : `<div class="empty" style="padding:10px">没找到匹配的番剧</div>`;
+      results.querySelectorAll(".rv-opt").forEach(o => o.onclick = () => choose(all.find(x => x.id === +o.dataset.id)));
+    });
   }
 
   /* ---------------- 社区「番剧评价」聚合 ---------------- */
@@ -552,10 +602,10 @@
       .is("parent_id", null)
       .order("created_at", { ascending: false }).limit(80);
     if (error) { wrap.innerHTML = `<div class="err">加载失败：${esc(error.message)}</div>`; return; }
-    if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有人对番剧发表评价，去番剧详情页抢沙发吧～</div>`; return; }
+    if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有人对番剧发表评价，<button class="btn btn-primary" id="rv-empty-new" style="padding:8px 18px;margin-top:8px">去发第一条</button>～</div>`; const be = $("#rv-empty-new", wrap); if (be) be.onclick = openReviewComposer; return; }
     const ids = [...new Set(data.map(c => c.user_id))];
     const names = await fetchNames(ids);
-    wrap.innerHTML = data.map(c => {
+    wrap.innerHTML = (USER ? `<button class="btn btn-primary" id="rv-new" style="padding:9px 20px;margin-bottom:12px">＋ 发评价（可带图）</button>` : "") + data.map(c => {
       const a = window.ANIME_DATA.find(x => x.id === c.anime_id);
       const prof = names[c.user_id]; const name = (prof && prof.username) || "用户";
       return `<div class="review-card" data-anime="${c.anime_id}">
@@ -569,6 +619,7 @@
       closeComm();
       if (window.openModal) window.openModal(+card.dataset.anime);
     });
+    const rvNew = $("#rv-new", wrap); if (rvNew) rvNew.onclick = openReviewComposer;
   }
 
   /* ---------------- 共享收藏 / 评分（替代 localStorage） ---------------- */
@@ -685,7 +736,7 @@
   }
 
   /* ---------------- 导出 ---------------- */
-  window.Community = { init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum };
+  window.Community = { init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum, openReviewComposer };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
