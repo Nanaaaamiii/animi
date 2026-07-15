@@ -42,6 +42,8 @@
     return `<span class="${cls}" style="background:${grad(id || 0)}">${esc(nm[0] || "U")}</span>`;
   };
   const uidTag = (profile) => (profile && profile.uid != null) ? `<span class="c-uid">UID:${profile.uid}</span>` : "";
+  // 可点击跳转用户主页的包裹（头像/昵称用）：点开对方的「我的」
+  const uLink = (inner, id) => `<span class="u-link" data-uid="${esc(id)}">${inner}</span>`;
   // 用户称号（如「站长」），数据来自 profiles.role
   const ROLE_CLASS = { "站长": "role-owner", "管理员": "role-admin", "编辑": "role-editor" };
   const roleTag = (profile) => {
@@ -150,7 +152,7 @@
   function openIdentity() {
     const mask = $("#comm-mask"), modal = $("#comm-modal");
     if (!USER) { openAuth(mask, modal); return; }
-    openProfile(mask, modal);
+    openProfile(USER.id, mask, modal);
   }
 
   function openAuth(mask, modal) {
@@ -215,7 +217,7 @@
     if (error) { toast("签到失败：" + error.message); return; }
     p.exp = newExp; p.level = newLv; p.last_checkin = today;
     renderUserChip();
-    openProfile($("#comm-mask"), $("#comm-modal"));
+    openProfile(USER.id, $("#comm-mask"), $("#comm-modal"));
     toast(newLv > beforeLv ? "签到成功！升级到 Lv" + newLv + " 🎉" : "签到成功！EXP +10");
   }
 
@@ -233,11 +235,86 @@
     }
   }
 
-  function openProfile(mask, modal) {
-    const p = USER.profile || {};
+  // 关注 / 粉丝 / 隐藏主页 相关
+  async function openProfile(targetId, mask, modal) {
+    mask = mask || $("#comm-mask"); modal = modal || $("#comm-modal");
+    if (!targetId && !USER) { openAuth(mask, modal); return; }
+    const tid = targetId || (USER && USER.id);
+    if (!tid) { openAuth(mask, modal); return; }
+    const isSelf = USER && tid === USER.id;
+
+    const { data: tp, error } = await sb.from("profiles").select("*").eq("id", tid).single();
+    if (error || !tp) {
+      modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="err">用户不存在或已注销</div>`;
+      $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden"; return;
+    }
+
+    // 关注统计 + 是否已关注
+    let cntFollowing = 0, cntFollowers = 0, following = false;
+    try {
+      const [a, b] = await Promise.all([
+        sb.from("follows").select("following_id", { count: "exact", head: true }).eq("follower_id", tid),
+        sb.from("follows").select("follower_id", { count: "exact", head: true }).eq("following_id", tid)
+      ]);
+      cntFollowing = a.count || 0; cntFollowers = b.count || 0;
+    } catch (_) {}
+    if (USER && !isSelf) {
+      const { data: fr } = await sb.from("follows").select("follower_id").eq("follower_id", USER.id).eq("following_id", tid).maybeSingle();
+      following = !!fr;
+    }
+
+    const p = tp;
     const li = levelInfo(p.exp);
-    const av = avatarHTML(p, USER.id, "lg");
+    const av = avatarHTML(p, tid, "lg");
     const signed = p.last_checkin === todayStr();
+    const statsRow = `<div class="follow-stats">
+        <button class="fs-item" id="fs-following"><b>${cntFollowing}</b><span>关注</span></button>
+        <button class="fs-item" id="fs-followers"><b>${cntFollowers}</b><span>粉丝</span></button>
+      </div>`;
+    const _pt = window.__profileTab || "collect";
+    const tabsHTML = `<div class="mine-tabs profile-tabs" id="profile-tabs">
+        <button class="mine-tab ${_pt === "collect" ? "active" : ""}" data-mt="collect">收藏</button>
+        <button class="mine-tab ${_pt === "reviews" ? "active" : ""}" data-mt="reviews">番剧评价</button>
+        <button class="mine-tab ${_pt === "posts" ? "active" : ""}" data-mt="posts">论坛帖子</button>
+      </div>`;
+
+    // ---- 隐藏主页：非本人访问且 is_hidden → 仅展示占位 ----
+    if (!isSelf && p.is_hidden) {
+      modal.innerHTML = `
+        <button class="modal-close" id="comm-close">✕</button>
+        <div class="comm-title">用户资料</div>
+        <div class="id-card">
+          <div class="avatar-prev">${avatarHTML(p, tid, "lg")}</div>
+          <div class="uid-line">${esc(p.username || "用户")}${roleTag(p)}</div>
+          <div class="hidden-state">🔒 该用户已隐藏主页</div>
+        </div>`;
+      $("#comm-close").onclick = closeComm;
+      mask.classList.add("open"); document.body.style.overflow = "hidden"; return;
+    }
+
+    // ---- 他人主页（只读）----
+    if (!isSelf) {
+      modal.innerHTML = `
+        <button class="modal-close" id="comm-close">✕</button>
+        <div class="comm-title">${esc(p.username || "用户")} 的资料</div>
+        <div class="id-card">
+          <div class="avatar-prev">${av}</div>
+          <div class="uid-line">UID：<b>${p.uid != null ? p.uid : "—"}</b>${roleTag(p)}</div>
+          ${statsRow}
+          <button class="btn ${following ? "btn-ghost" : "btn-primary"}" id="follow-btn" style="width:100%;justify-content:center;margin-top:6px">${following ? "已关注 · 取消关注" : "＋ 关注"}</button>
+        </div>
+        ${tabsHTML}
+        <div id="profile-content" class="profile-content"></div>`;
+      $("#comm-close").onclick = closeComm;
+      $("#follow-btn").onclick = () => toggleFollow(tid);
+      $("#fs-following").onclick = () => openFollowList("following", tid);
+      $("#fs-followers").onclick = () => openFollowList("followers", tid);
+      bindProfileTabs(tid, false, $("#profile-content"));
+      renderProfileContent(window.__profileTab || "collect", tid, false, $("#profile-content"));
+      mask.classList.add("open"); document.body.style.overflow = "hidden"; return;
+    }
+
+    // ---- 本人主页（可编辑 + 隐藏开关）----
     modal.innerHTML = `
       <button class="modal-close" id="comm-close">✕</button>
       <div class="comm-title">我的资料</div>
@@ -251,6 +328,7 @@
           </div>
         </div>
         <div class="uid-line">UID：<b>${p.uid != null ? p.uid : "—"}</b>${roleTag(p)}</div>
+        ${statsRow}
         <div class="lv-line">
           <span class="lv-badge">${li.max ? "Lv" + li.lv + " · 满级" : "Lv" + li.lv}</span>
           <span class="lv-exp">${li.max ? "EXP " + li.exp : "EXP " + li.exp + " / " + li.next}</span>
@@ -263,8 +341,11 @@
           <textarea id="id-bio" class="cb-textarea" placeholder="一句话介绍自己（选填）" maxlength="120" style="min-height:60px">${esc(p.bio || "")}</textarea></div>
         <div class="auth-err" id="id-err"></div>
         <button class="btn btn-primary" id="id-save" style="width:100%;justify-content:center">保存资料</button>
+        <label class="hide-toggle"><input type="checkbox" id="hide-profile" ${p.is_hidden ? "checked" : ""}/> 隐藏我的主页（仅自己可见）</label>
         <button class="btn btn-ghost" id="id-logout" style="width:100%;justify-content:center;margin-top:8px">退出登录</button>
-      </div>`;
+      </div>
+      ${tabsHTML}
+      <div id="profile-content" class="profile-content"></div>`;
     $("#comm-close").onclick = closeComm;
     $("#avatar-pick").onclick = () => $("#avatar-file").click();
     $("#avatar-file").onchange = () => {
@@ -276,6 +357,8 @@
       r.readAsDataURL(f);
     };
     $("#checkin-btn").onclick = () => doCheckIn();
+    $("#fs-following").onclick = () => openFollowList("following", tid);
+    $("#fs-followers").onclick = () => openFollowList("followers", tid);
     $("#id-save").onclick = async () => {
       const v = $("#id-name").value.trim();
       const bioVal = $("#id-bio").value.trim();
@@ -290,12 +373,155 @@
           if (e2) $("#id-err").textContent = "昵称已保存；头像/简介需先在 Supabase 执行最新建表 SQL（含 storage 头像桶）。";
         } catch (e) { $("#id-err").textContent = "头像上传失败：" + e.message; }
       }
-      await ensureProfile(); renderUserChip(); openProfile(mask, modal); toast("已更新资料");
+      await ensureProfile(); renderUserChip(); openProfile(USER.id, mask, modal); toast("已更新资料");
+    };
+    $("#hide-profile").onchange = async () => {
+      const hide = $("#hide-profile").checked;
+      const { error } = await sb.from("profiles").update({ is_hidden: hide }).eq("id", USER.id);
+      if (error) { toast("设置失败：" + error.message); $("#hide-profile").checked = !hide; return; }
+      if (USER.profile) USER.profile.is_hidden = hide;
+      toast(hide ? "已隐藏主页，仅自己可见" : "已公开主页");
     };
     $("#id-logout").onclick = async () => {
       await sb.auth.signOut(); USER = null; renderUserChip(); closeComm(); toast("已退出登录");
     };
+    bindProfileTabs(tid, true, $("#profile-content"));
+    renderProfileContent(window.__profileTab || "collect", tid, true, $("#profile-content"));
     mask.classList.add("open"); document.body.style.overflow = "hidden";
+  }
+
+  // 关注 / 取消关注
+  async function toggleFollow(targetId) {
+    if (!USER) { openIdentity(); return; }
+    const btn = $("#follow-btn");
+    const { data: ex } = await sb.from("follows").select("follower_id").eq("follower_id", USER.id).eq("following_id", targetId).maybeSingle();
+    if (ex) {
+      const { error } = await sb.from("follows").delete().eq("follower_id", USER.id).eq("following_id", targetId);
+      if (error) { toast("操作失败：" + error.message); return; }
+      toast("已取消关注");
+    } else {
+      const { error } = await sb.from("follows").insert({ follower_id: USER.id, following_id: targetId });
+      if (error) { toast("操作失败：" + error.message); return; }
+      toast("已关注");
+    }
+    openProfile(targetId, $("#comm-mask"), $("#comm-modal"));
+  }
+
+  // 关注 / 粉丝 列表弹窗
+  async function openFollowList(kind, id) {
+    const mask = $("#comm-mask"), modal = $("#comm-modal");
+    const title = kind === "following" ? "关注" : "粉丝";
+    modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="comm-title">${title}</div><div class="loading">加载中…</div>`;
+    $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
+    let ids = [];
+    try {
+      if (kind === "following") {
+        const { data } = await sb.from("follows").select("following_id").eq("follower_id", id);
+        ids = (data || []).map(r => r.following_id);
+      } else {
+        const { data } = await sb.from("follows").select("follower_id").eq("following_id", id);
+        ids = (data || []).map(r => r.follower_id);
+      }
+    } catch (e) { modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="comm-title">${title}</div><div class="err">加载失败</div>`; $("#comm-close").onclick = closeComm; return; }
+    if (!ids.length) {
+      modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="comm-title">${title}</div><div class="empty">${kind === "following" ? "还没有关注任何人" : "还没有粉丝"}</div>`;
+      $("#comm-close").onclick = closeComm; return;
+    }
+    const names = await fetchNames(ids);
+    modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button>
+      <div class="comm-title">${title} ${ids.length}</div>
+      <div class="follow-list">${ids.map(uid => `
+        <div class="follow-row u-link" data-uid="${uid}">
+          ${avatarHTML(names[uid], uid, "sm")}
+          <span class="follow-name">${esc((names[uid] && names[uid].username) || "用户")}</span>
+          ${roleTag(names[uid])}${uidTag(names[uid])}
+        </div>`).join("")}</div>`;
+    $("#comm-close").onclick = closeComm;
+  }
+
+  function bindProfileTabs(targetId, isSelf, host) {
+    const tabs = $("#profile-tabs"); if (!tabs || !host) return;
+    tabs.addEventListener("click", (e) => {
+      const b = e.target.closest(".mine-tab"); if (!b) return;
+      $$(".mine-tab", tabs).forEach(x => x.classList.remove("active")); b.classList.add("active");
+      window.__profileTab = b.dataset.mt;
+      renderProfileContent(b.dataset.mt, targetId, isSelf, host);
+    });
+  }
+
+  async function renderProfileContent(tab, targetId, isSelf, host) {
+    if (tab === "reviews") return renderProfileReviews(targetId, isSelf, host);
+    if (tab === "posts") return renderProfilePosts(targetId, isSelf, host);
+    return renderProfileCollections(targetId, isSelf, host);
+  }
+
+  async function renderProfileCollections(targetId, isSelf, host) {
+    host.innerHTML = `<div class="loading">加载中…</div>`;
+    const { data, error } = await sb.from("collections").select("*").eq("user_id", targetId);
+    if (error) { host.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    let list = (data || []).map(c => ({ a: window.ANIME_DATA.find(x => x.id === c.anime_id), c })).filter(x => x.a);
+    list.sort((x, y) => new Date(y.c.created_at) - new Date(x.c.created_at));
+    if (!list.length) { host.innerHTML = `<div class="empty">${isSelf ? "还没有收藏任何番剧。" : "TA 还没有收藏。"}</div>`; return; }
+    host.innerHTML = `<div class="mine-grid">${list.map(x => mineCardHTML(x.a, x.c)).join("")}</div>`;
+    host.querySelectorAll(".anime-card").forEach(card => card.onclick = () => openAnimeDetail(card.dataset.id));
+  }
+
+  async function renderProfileReviews(targetId, isSelf, host) {
+    host.innerHTML = `<div class="loading">加载中…</div>`;
+    const { data, error } = await sb.from("anime_comments")
+      .select("id,anime_id,body,created_at,images,parent_id").eq("user_id", targetId).is("parent_id", null)
+      .order("created_at", { ascending: false }).limit(100);
+    if (error) { host.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    if (!data || !data.length) { host.innerHTML = `<div class="empty">${isSelf ? "还没有发表评价。" : "TA 还没有评价。"}</div>`; return; }
+    const animeIds = [...new Set(data.map(c => c.anime_id))];
+    const { data: colls } = await sb.from("collections").select("anime_id,rating").in("anime_id", animeIds).eq("user_id", targetId);
+    const ratings = {}; (colls || []).forEach(x => { if (x.rating) ratings[x.anime_id] = x.rating; });
+    host.innerHTML = `<div class="mine-posts">${data.map(c => {
+      const a = window.ANIME_DATA.find(x => x.id === c.anime_id);
+      const rt = ratings[c.anime_id];
+      const stars = rt ? "★".repeat(rt) + "☆".repeat(10 - rt) : "";
+      return `<div class="post-card mine-post" data-anime="${c.anime_id}">
+        <div class="post-main">
+          <div class="post-title">📺 ${esc(a ? a.title : "未知番剧")}</div>
+          ${c.body ? `<div class="post-body">${esc(c.body)}</div>` : ""}
+          ${imagesHTML(c.images)}
+          <div class="post-meta"><span class="c-time">${timeAgo(c.created_at)}</span></div>
+        </div>
+        ${isSelf ? `<button class="post-del" data-del-rev="${c.id}">删除</button>` : ""}
+      </div>`;
+    }).join("")}</div>`;
+    host.querySelectorAll(".mine-post[data-anime]").forEach(card => card.onclick = (e) => { if (e.target.closest(".post-del")) return; openAnimeDetail(card.dataset.anime); });
+    if (isSelf) host.querySelectorAll("[data-del-rev]").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm("确定删除这条番剧评论？其下的回复也会一并删除。")) return;
+      const { error } = await sb.from("anime_comments").delete().eq("id", b.dataset.delRev).eq("user_id", USER.id);
+      if (error) { toast("删除失败：" + error.message); return; }
+      toast("已删除"); renderProfileReviews(targetId, isSelf, host);
+    });
+  }
+
+  async function renderProfilePosts(targetId, isSelf, host) {
+    host.innerHTML = `<div class="loading">加载中…</div>`;
+    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at").eq("user_id", targetId).order("created_at", { ascending: false }).limit(100);
+    if (error) { host.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
+    if (!data || !data.length) { host.innerHTML = `<div class="empty">${isSelf ? "还没有发过帖子。" : "TA 还没有发帖。"}</div>`; return; }
+    host.innerHTML = `<div class="mine-posts">${data.map(p => `
+      <div class="post-card mine-post" data-id="${p.id}">
+        <div class="post-main">
+          <div class="post-title">${esc(p.title)}</div>
+          <div class="post-body">${esc(p.body)}</div>
+          <div class="post-meta"><span class="c-time">${timeAgo(p.created_at)}</span></div>
+        </div>
+        ${isSelf ? `<button class="post-del" data-del-post="${p.id}">删除</button>` : ""}
+      </div>`).join("")}</div>`;
+    host.querySelectorAll(".mine-post[data-id]").forEach(card => card.onclick = () => openPost(card.dataset.id));
+    if (isSelf) host.querySelectorAll("[data-del-post]").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm("确定删除这条论坛帖子？")) return;
+      const { error } = await sb.from("forum_posts").delete().eq("id", b.dataset.delPost).eq("user_id", USER.id);
+      if (error) { toast("删除失败：" + error.message); return; }
+      toast("已删除"); renderProfilePosts(targetId, isSelf, host);
+    });
   }
   function closeComm() { const m = $("#comm-mask"); if (m) m.classList.remove("open"); document.body.style.overflow = ""; }
 
@@ -328,6 +554,11 @@
       const it = e.target.closest("#mine-grid .anime-card");
       if (it) openAnimeDetail(it.dataset.id);
     });
+    // 头像 / 昵称点击进入对方主页（capture 阶段优先处理，避免触发外层卡片的点击）
+    document.addEventListener("click", (e) => {
+      const ul = e.target.closest(".u-link");
+      if (ul && ul.dataset.uid) { e.stopPropagation(); openProfile(ul.dataset.uid); }
+    }, true);
     // 「我的」子标签：收藏 / 番剧评论 / 论坛
     const mtab = $("#mine-tabs");
     if (mtab) mtab.addEventListener("click", (e) => {
@@ -362,7 +593,7 @@
           <div class="post-title">${esc(p.title)}</div>
           <div class="post-body">${esc(p.body)}</div>
           ${imagesHTML(p.images)}
-          <div class="post-meta"><span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span><span>@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${roleTag(names[p.user_id])}${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
+          <div class="post-meta">${uLink(`<span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span>`, p.user_id)}<span class="u-link" data-uid="${p.user_id}">@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${roleTag(names[p.user_id])}${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
         </div>
       </div>`).join("");
     $$(".post-card", wrap).forEach(c => c.onclick = () => openPost(c.dataset.id));
@@ -391,7 +622,7 @@
         <div class="post-title">${esc(post.title)}</div>
         <div class="post-body" style="white-space:pre-wrap">${esc(post.body)}</div>
         ${imagesHTML(post.images)}
-        <div class="post-meta"><span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span><span>@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${roleTag(names[post.user_id])}${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
+        <div class="post-meta">${uLink(`<span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span>`, post.user_id)}<span class="u-link" data-uid="${post.user_id}">@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${roleTag(names[post.user_id])}${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
       </div>
       <div class="comm-divider">评论 ${comments ? comments.length : 0}</div>
       <div id="comment-list" class="comment-list">${comments && comments.length ? comments.map(c => commentHTML(c, names[c.user_id])).join("") : `<div class="empty">还没有评论</div>`}</div>
@@ -528,7 +759,7 @@
     const name = (profile && profile.username) || "用户";
     const replies = (c._replies || []).map(r => commentHTML(r, profile, depth + 1)).join("");
     return `<div class="comment-item${mine ? " mine" : ""}${depth ? " reply" : ""}">
-      <div class="c-head"><span class="c-av">${avatarHTML(profile, c.user_id, "xs")}</span><span class="c-name">@${esc(name)}</span>${roleTag(profile)}${uidTag(profile)}<span class="c-time">${timeAgo(c.created_at)}</span>${mine ? `<button class="c-del" data-id="${c.id}">删除</button>` : ""}</div>
+      <div class="c-head">${uLink(`<span class="c-av">${avatarHTML(profile, c.user_id, "xs")}</span>`, c.user_id)}<span class="u-link" data-uid="${c.user_id}">@${esc(name)}</span>${roleTag(profile)}${uidTag(profile)}<span class="c-time">${timeAgo(c.created_at)}</span>${mine ? `<button class="c-del" data-id="${c.id}">删除</button>` : ""}</div>
       ${c.body ? `<div class="c-body">${esc(c.body)}</div>` : ""}
       ${imagesHTML(c.images)}
       <div class="c-actions"><button class="c-reply" data-id="${c.id}" data-name="${esc(name)}">回复</button></div>
@@ -724,7 +955,7 @@
       const rt = ratings[c.anime_id];
       const stars = rt ? "★".repeat(rt) + "☆".repeat(10 - rt) : "";
       return `<div class="review-card" data-anime="${c.anime_id}">
-        <div class="rv-head"><span class="c-av">${avatarHTML(prof, c.user_id, "xs")}</span><span class="rv-name">@${esc(name)}</span>${roleTag(prof)}${uidTag(prof)}<span class="c-time">${timeAgo(c.created_at)}</span></div>
+        <div class="rv-head">${uLink(`<span class="c-av">${avatarHTML(prof, c.user_id, "xs")}</span>`, c.user_id)}<span class="u-link" data-uid="${c.user_id}">@${esc(name)}</span>${roleTag(prof)}${uidTag(prof)}<span class="c-time">${timeAgo(c.created_at)}</span></div>
         <div class="rv-anime">📺 ${esc(a ? a.title : "未知番剧")}</div>
         ${rt ? `<div class="rv-score">我的评分：<b style="color:#ffce3d">${stars}</b> ${rt}/10</div>` : ""}
         ${c.body ? `<div class="rv-body">${esc(c.body)}</div>` : ""}
@@ -904,7 +1135,7 @@
         <div class="ov"></div>
         <div class="status-tag on">${STATUS[c.status] || ""}</div>
       </div>
-      <div class="meta"><div class="title">${esc(a.title)}</div><div class="sub">${c.rating ? "我的评分 " + c.rating + "/10" : "未评分"}</div>${c.note ? `<div class="mine-comment">${esc(c.note)}</div>` : ""}</div>
+      <div class="meta"><div class="title">${esc(a.title)}</div><div class="sub">${c.rating ? "评分 " + c.rating + "/10" : "未评分"}</div>${c.note ? `<div class="mine-comment">${esc(c.note)}</div>` : ""}</div>
     </article>`;
   }
 
