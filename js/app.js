@@ -136,6 +136,7 @@
       a.year >= Math.max(1980, fromY) && a.year <= toY);
   }
   let _game = null;   // 当前对局状态
+  let _gameSeq = 0;   // 对局序号，防止切换视图后旧题目异步渲染覆盖新界面
   function renderGameRoot() {
     const root = $("#game-root");
     if (!root) return;
@@ -167,12 +168,14 @@
       const pool = buildGamePool(fromY, toY);
       if (pool.length < 2) { alert("该年份区间内可用番剧不足 2 部，请扩大范围。"); return; }
       _game = { pool, fromY, toY, idx: 0, correct: 0, wrong: 0, pair: null, busy: false };
+      _gameSeq++;
       renderQuestion();
     });
   }
   async function renderQuestion() {
     const root = $("#game-root"); if (!_game) return;
     if (isGameOver()) return;
+    const seq = _gameSeq;
     _game.busy = true;
     root.innerHTML = gameHUD() + `
       <div class="game-arena" id="game-arena">
@@ -180,6 +183,7 @@
       </div>`;
     let pair = null;
     for (let i = 0; i < 50 && !pair; i++) pair = await pickPair(_game.pool);
+    if (seq !== _gameSeq) return;   // 已切换视图/重开，丢弃本次结果
     if (!pair) { root.innerHTML = gameHUD() + `<div class="game-end"><h2>没有符合条件的番剧 😢</h2><button class="btn btn-ghost" onclick="if(window.renderGameRoot)renderGameRoot()">返回</button></div>`; return; }
     _game.pair = pair; _game.busy = false;
     const arena = $("#game-arena");
@@ -525,6 +529,7 @@
     } catch (e) { /* 离线或被拦截：保持烘焙值 */ }
   }
   window.openModal = openModal;   // 顶层挂载，供社区/其它模块随时调用
+  window.renderGameRoot = renderGameRoot;   // 顶层挂载，供游戏内「返回」按钮内联调用
   function closeModal() {
     const m = $("#modal-mask"); if (m) m.classList.remove("open");
     document.body.style.overflow = "";
