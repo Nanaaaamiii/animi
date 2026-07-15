@@ -163,17 +163,34 @@
       <div class="section wrap">
         <div class="section-head">
           <div>
-            <div class="section-title"><span class="bar"></span>我的收藏</div>
-            <div class="section-desc">收藏状态 · 个人评分 · 评论，社区共享可见</div>
+            <div class="section-title"><span class="bar"></span>我的</div>
+            <div class="section-desc">收藏 · 我发的番剧评论 · 我发的论坛帖子</div>
           </div>
-          <div class="filter-count" id="mine-count">共 0 部</div>
         </div>
-        <div class="mine-stats" id="mine-stats"></div>
-        <div class="filter-bar" id="mine-filter"></div>
-        <div class="card-grid" id="mine-grid"></div>
-        <div class="mine-empty" id="mine-empty" hidden>
-          <p>还没有收藏任何番剧。</p>
-          <a href="#" class="btn btn-primary to-browse">去动画库逛逛 →</a>
+        <div class="mine-tabs" id="mine-tabs">
+          <button class="mine-tab active" data-mt="collect">我的收藏</button>
+          <button class="mine-tab" data-mt="reviews">番剧评论</button>
+          <button class="mine-tab" data-mt="posts">论坛帖子</button>
+        </div>
+        <!-- 收藏 -->
+        <div id="mine-collect" class="mine-pane">
+          <div class="mine-stats" id="mine-stats"></div>
+          <div class="filter-bar" id="mine-filter"></div>
+          <div class="card-grid" id="mine-grid"></div>
+          <div class="mine-empty" id="mine-empty" hidden>
+            <p>还没有收藏任何番剧。</p>
+            <a href="#" class="btn btn-primary to-browse">去动画库逛逛 →</a>
+          </div>
+        </div>
+        <!-- 番剧评论 -->
+        <div id="mine-reviews" class="mine-pane hidden">
+          <div class="post-list" id="mine-reviews-list"></div>
+          <div class="mine-empty-pane" id="mine-reviews-empty" hidden>还没有发过番剧评论，去番剧详情页或社区发一条吧～</div>
+        </div>
+        <!-- 论坛帖子 -->
+        <div id="mine-posts" class="mine-pane hidden">
+          <div class="post-list" id="mine-posts-list"></div>
+          <div class="mine-empty-pane" id="mine-posts-empty" hidden>还没有发过论坛帖子，去社区发一条吧～</div>
         </div>
       </div>
     </section>
