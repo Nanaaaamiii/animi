@@ -1673,12 +1673,26 @@
   /* ---------------- 公告栏布局：拖动 / 缩放 / 持久化（仅站长/管理员，存 Supabase） ---------------- */
   const ANN_LAYOUT_KEY = "announce_layout"; // 本机兜底
   // 应用布局：优先用数据库中的 ANN_LAYOUT（所有访客一致），其次本机 localStorage 兜底
+  // 防御：若保存的尺寸/位置非法（0、负数、过小、超出合理范围或数据损坏），则丢弃并回退到
+  // CSS 默认（380×520 / right:4% / top:84px），并清除本机坏值——避免面板被压成 0 或移出屏幕后
+  // 「永久消失」（一旦变成 0 尺寸，编辑/重置按钮也点不到，形成死循环）。
+  const ANN_MIN_W = 240, ANN_MIN_H = 160, ANN_MAX_W = 1200, ANN_MAX_H = 1400, ANN_POS_LIMIT = 10000;
   function applyAnnounceLayout(panel) {
     if (!panel) return;
     let d = (ANN_LAYOUT && ANN_LAYOUT.left != null && ANN_LAYOUT.top != null && ANN_LAYOUT.width != null && ANN_LAYOUT.height != null)
       ? ANN_LAYOUT
       : (() => { try { const raw = localStorage.getItem(ANN_LAYOUT_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } })();
-    if (!d || d.left == null || d.top == null || d.width == null || d.height == null) return;
+    const ok = d && Number.isFinite(+d.left) && Number.isFinite(+d.top)
+      && +d.width >= ANN_MIN_W && +d.width <= ANN_MAX_W
+      && +d.height >= ANN_MIN_H && +d.height <= ANN_MAX_H
+      && Math.abs(+d.left) <= ANN_POS_LIMIT && Math.abs(+d.top) <= ANN_POS_LIMIT;
+    if (!ok) {
+      // 坏布局：清除内联样式 + 本机坏值，回退 CSS 默认，保证面板一定可见
+      panel.style.left = "auto"; panel.style.top = "";
+      panel.style.width = ""; panel.style.height = ""; panel.style.right = "4%";
+      try { localStorage.removeItem(ANN_LAYOUT_KEY); } catch (e) {}
+      return;
+    }
     panel.style.right = "auto";
     panel.style.left = d.left + "px";
     panel.style.top = d.top + "px";
@@ -1689,6 +1703,8 @@
   async function saveAnnounceLayout(panel) {
     if (!panel || !isAdmin() || !sb) return;
     const r = panel.getBoundingClientRect();
+    // 跳过畸形尺寸（如面板被压成 0/极小），避免把坏值写进数据库/本机，导致下次加载直接消失
+    if (!(r.width >= 120 && r.height >= 100)) return;
     const p = panel.offsetParent ? panel.offsetParent.getBoundingClientRect() : { left: 0, top: 0 };
     const layout = {
       pos_x: Math.round(r.left - p.left),
