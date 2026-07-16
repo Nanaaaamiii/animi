@@ -16,17 +16,10 @@
   /* ---------------- 等级配置 ---------------- */
   // 等级：每 200 EXP 升 1 级，线性、无上限（exp 0→Lv1，200→Lv2，400→Lv3 …）
   const EXP_PER_LEVEL = 200;
-  // 社区互动经验：每次互动 +10 EXP，单日上限 50 EXP（约 5 次/天）
+  // 社区互动经验：每次互动 +10 EXP，单日上限 50 EXP（约 5 次/天）。
+  // 上限为【账号级】，累计值存 profiles.interact_exp / interact_date，跨天自动归零（列由 supabase/add_interact_cap.sql 提供）
   const INTERACT_EXP = 10;
   const INTERACT_DAILY_CAP = 50;
-  // 单日社区互动经验累计（存 localStorage，按日期分桶，跨天自动清零）
-  const interactKey = () => "animi_interact_exp_" + todayStr();
-  function interactToday() {
-    try { return parseInt(localStorage.getItem(interactKey()) || "0", 10) || 0; } catch (e) { return 0; }
-  }
-  function addInteractToday(n) {
-    try { const v = interactToday() + n; localStorage.setItem(interactKey(), String(v)); } catch (e) {}
-  }
   function levelInfo(exp) {
     exp = exp || 0;
     const lv = Math.floor(exp / EXP_PER_LEVEL) + 1;
@@ -267,23 +260,30 @@
     toast(newLv > beforeLv ? "签到成功！升级到 Lv" + newLv + " 🎉" : "签到成功！EXP +20");
   }
 
-  // 社区互动（评论/点赞/发帖等）每次 +10 EXP，单日上限 50 EXP；达上限不再加并提示
+  // 社区互动（评论/点赞/发帖等）每次 +10 EXP，单日上限 50 EXP（账号级）；达上限不再加并提示
   async function awardExp() {
     if (!USER || !USER.profile) return;
-    if (interactToday() >= INTERACT_DAILY_CAP) {
+    const today = todayStr();
+    const before = USER.profile.level;
+    let daily = USER.profile.interact_exp || 0;
+    if ((USER.profile.interact_date || "") !== today) daily = 0; // 跨天：当日累计经验归零
+    if (daily >= INTERACT_DAILY_CAP) {
       toast("今日社区互动经验已封顶（50 EXP）"); return;
     }
     const gain = INTERACT_EXP;
     const newExp = (USER.profile.exp || 0) + gain;
     const newLv = levelInfo(newExp).lv;
-    const { error } = await sb.from("profiles").update({ exp: newExp, level: newLv }).eq("id", USER.id);
-    if (!error) {
-      const before = USER.profile.level;
-      USER.profile.exp = newExp; USER.profile.level = newLv;
-      addInteractToday(gain);
-      renderUserChip();
-      toast(newLv > before ? "升级到 Lv" + newLv + " 🎉" : "社区互动 +10 EXP");
+    const newDaily = daily + gain;
+    const { error: e1 } = await sb.from("profiles").update({ exp: newExp, level: newLv }).eq("id", USER.id);
+    if (e1) { toast("经验更新失败：" + e1.message); return; }
+    USER.profile.exp = newExp; USER.profile.level = newLv;
+    // 账号级单日上限：列由 supabase/add_interact_cap.sql 提供；未执行时这两列不存在，静默跳过（仅无上限，不影响经验发放）
+    if (USER.profile.interact_date !== undefined || USER.profile.interact_exp !== undefined) {
+      const { error: e2 } = await sb.from("profiles").update({ interact_exp: newDaily, interact_date: today }).eq("id", USER.id);
+      if (!e2) { USER.profile.interact_exp = newDaily; USER.profile.interact_date = today; }
     }
+    renderUserChip();
+    toast(newLv > before ? "升级到 Lv" + newLv + " 🎉" : "社区互动 +10 EXP");
   }
 
   // 关注 / 粉丝 / 隐藏主页 相关
@@ -1332,10 +1332,16 @@
   }
 
   function bindMinePostEvents(list) {
-    // 番剧卡片点击 → 打开详情页
-    list.querySelectorAll(".mine-post[data-anime]").forEach(card => card.onclick = (e) => {
+    // 卡片点击 → 进入它所在的社区页面（番剧评论进该番讨论区并定位到该条；论坛帖进该帖）
+    list.querySelectorAll(".mine-post").forEach(card => card.onclick = (e) => {
       if (e.target.closest(".post-del")) return;
-      openAnimeDetail(card.dataset.anime);
+      const aid = card.dataset.anime;
+      if (aid) {
+        const a = window.ANIME_DATA.find(x => x.id === Number(aid));
+        openAnimeDiscussion(Number(aid), a ? a.title : "", card.dataset.id || undefined);
+      } else if (card.dataset.id) {
+        openPost(card.dataset.id);
+      }
     });
     // 删除番剧评论（连同其楼中楼回复）
     list.querySelectorAll("[data-del-rev]").forEach(b => b.onclick = async (e) => {
