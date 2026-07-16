@@ -1263,16 +1263,31 @@
   }
 
   /* ---------------- Realtime ---------------- */
+  // 已建立的实时通道引用。init 会多次调用 setupRealtime（初始化时 / 登录态就绪后 /
+  // onAuthStateChange），而 Supabase v2 一旦通道 .subscribe() 后就不能再对其 .on(
+  // "postgres_changes") —— 否则报 "cannot add postgres_changes callbacks ... after
+  // subscribe()"。因此每次重订阅前先移除旧通道，并用唯一后缀保证拿到的是全新的、
+  // 未订阅的通道，彻底规避该报错。
+  let rtCh = { forum: null, anime: null, ann: null, dm: null };
+  let rtSeq = 0;
+  function teardownRealtime() {
+    if (!sb) return;
+    Object.values(rtCh).forEach(ch => { if (ch) { try { sb.removeChannel(ch); } catch (e) {} } });
+    rtCh = { forum: null, anime: null, ann: null, dm: null };
+  }
   function setupRealtime() {
     if (!sb) return;
+    teardownRealtime();
+    rtSeq++;
+    const t = "-" + rtSeq; // 唯一后缀：每次都是全新的、未订阅的通道
     try {
-      sb.channel("forum-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "forum_comments" }, () => { if (currentPostId) openPost(currentPostId); }).subscribe();
-      sb.channel("anime-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "anime_comments" }, (p) => { if (currentAnimeId && p.new.anime_id === currentAnimeId) openAnimeDiscussion(currentAnimeId); }).subscribe();
+      rtCh.forum = sb.channel("forum-c" + t).on("postgres_changes", { event: "INSERT", schema: "public", table: "forum_comments" }, () => { if (currentPostId) openPost(currentPostId); }).subscribe();
+      rtCh.anime = sb.channel("anime-c" + t).on("postgres_changes", { event: "INSERT", schema: "public", table: "anime_comments" }, (p) => { if (currentAnimeId && p.new.anime_id === currentAnimeId) openAnimeDiscussion(currentAnimeId); }).subscribe();
       // 公告栏变更（编辑内容 / 拖动布局）→ 所有访客实时同步
-      sb.channel("ann-c").on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => { renderAnnouncement(document.getElementById("announce-panel")); }).subscribe();
+      rtCh.ann = sb.channel("ann-c" + t).on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, () => { renderAnnouncement(document.getElementById("announce-panel")); }).subscribe();
       // 私信：只监听「发给我的新消息」→ 刷新红点（RLS 保证仅接收方可见）
       if (USER) {
-        sb.channel("dm-c").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${USER.id}` }, () => { refreshMsgDot(); }).subscribe();
+        rtCh.dm = sb.channel("dm-c" + t).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${USER.id}` }, () => { refreshMsgDot(); }).subscribe();
       }
     } catch (e) { console.warn("realtime 订阅失败", e); }
   }
