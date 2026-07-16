@@ -125,8 +125,9 @@
       </div>`).join("");
     bindTilt($("#game-promo")); bindRipple($("#game-promo"));
 
-    // 首页卡片交互（本季轮播 / 编辑推荐）
-    ["#featured-carousel", "#picks-grid"].forEach(sel => { bindTilt($(sel)); bindRipple($(sel)); });
+    // 首页卡片交互（本季轮播 / 编辑推荐）：用事件委托绑定点击，
+    // 既兼容异步注入的「站长推荐」卡片，也规避拖拽 .dragging 导致的 pointer-events:none 吞点击
+    ["#featured-carousel", "#picks-grid"].forEach(sel => { bindTilt($(sel)); bindCardOpen($(sel)); });
 
     renderCoverMarquee();
     // 首页右侧公告栏
@@ -829,19 +830,48 @@
     });
   }
 
+  /* ---------------- 卡片点击打开详情（事件委托版） ----------------
+     用容器级委托代替逐卡 bindRipple：
+     - 兼容「站长推荐」等异步注入的卡片（bindRipple 在卡片插入前就跑、会漏绑）
+     - 即使卡片因 .dragging 的 pointer-events:none 变成点击目标落在容器上，
+       e.target.closest('.anime-card') 仍能沿 DOM 找到卡片，点击不会丢失 */
+  function bindCardOpen(root) {
+    if (!root || root.dataset.openBound) return; // 只挂一次，避免重复监听
+    root.dataset.openBound = "1";
+    root.addEventListener("click", (e) => {
+      const card = e.target.closest(".anime-card");
+      if (!card || !root.contains(card)) return;
+      const id = +card.dataset.id;
+      if (!id) return;
+      // 点击波纹（视觉反馈）
+      const r = card.getBoundingClientRect();
+      const rip = document.createElement("span");
+      rip.className = "ripple";
+      const size = Math.max(r.width, r.height);
+      rip.style.width = rip.style.height = size + "px";
+      rip.style.left = (e.clientX - r.left) + "px";
+      rip.style.top = (e.clientY - r.top) + "px";
+      card.appendChild(rip);
+      setTimeout(() => rip.remove(), 600);
+      setTimeout(() => { if (window.openModal) openModal(id); }, 80);
+    });
+  }
+
   /* ---------------- 横向拖拽轮播 (drag-scroll) ---------------- */
   function enableDragScroll(wrap) {
     // 触屏设备用原生横向滚动（CSS overflow-x:auto + scroll-snap），不绑定鼠标拖拽，避免与手指滑动冲突
     if (window.matchMedia && !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
     const track = $(".carousel-track", wrap);
-    let down = false, startX = 0, sl = 0, moved = 0;
-    wrap.addEventListener("mousedown", (e) => { down = true; startX = e.pageX; sl = wrap.scrollLeft; moved = 0; wrap.classList.add("dragging"); });
-    window.addEventListener("mouseup", () => { down = false; wrap.classList.remove("dragging"); });
+    let down = false, startX = 0, sl = 0, dragging = false;
+    wrap.addEventListener("mousedown", (e) => { down = true; startX = e.pageX; sl = wrap.scrollLeft; dragging = false; });
+    window.addEventListener("mouseup", () => { down = false; dragging = false; wrap.classList.remove("dragging"); });
     wrap.addEventListener("mousemove", (e) => {
       if (!down) return;
-      e.preventDefault();
       const dx = e.pageX - startX;
-      moved += Math.abs(dx);
+      // 仅在真实拖动（超过阈值）时才加 dragging：避免「单击」被 pointer-events:none 吞掉点击
+      if (!dragging && Math.abs(dx) > 5) { dragging = true; wrap.classList.add("dragging"); }
+      if (!dragging) return;
+      e.preventDefault();
       wrap.scrollLeft = sl - dx;
     });
     // 滚轮横向
