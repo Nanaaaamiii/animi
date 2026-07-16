@@ -497,7 +497,8 @@
   // 排序函数（纯函数，不修改原数组）；dir 控制 升序/降序
   function sortBrowse(list) {
     const s = state.sort || "rating";
-    const mul = state.dir === "asc" ? 1 : -1;
+    // 基线比较器本身是「降序」（y 在前=高/新在前）；asc 需取反 → mul=-1，desc→mul=1
+    const mul = state.dir === "asc" ? -1 : 1;
     const arr = list.slice();
     if (s === "date") arr.sort((x, y) => mul * (y.date || "").localeCompare(x.date || ""));
     else if (s === "collect") arr.sort((x, y) => mul * ((y.collect_count || y.rating_count || 0) - (x.collect_count || x.rating_count || 0) || (y.rating || 0) - (x.rating || 0)));
