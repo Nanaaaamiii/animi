@@ -355,7 +355,7 @@ header.nav {
 @keyframes rippleAnim { to { transform: translate(-50%,-50%) scale(9); opacity: 0; } }
 
 /* ---------- 横向拖拽轮播 (drag-scroll) ---------- */
-.carousel { overflow: hidden; cursor: grab; user-select: none; }
+.carousel { overflow: hidden; cursor: grab; user-select: none; touch-action: pan-y; }
 .carousel:active { cursor: grabbing; }
 .carousel-track { display: flex; gap: 20px; padding: 6px 2px 14px; }
 .carousel .anime-card { flex: 0 0 200px; }
@@ -528,8 +528,8 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 }
 @media (max-width: 560px) {
   .cal-grid { grid-template-columns: 1fr; }
-  .search-box input { width: 92px; }
-  .brand .name { display: none; }   /* 省出空间，避免顶栏溢出 */
+  .search-box input { width: 76px; }
+  .brand .name { display: inline; font-size: 16px; }   /* 手机端保留 K-ON 主站标签，点按返回首页 */
   .hero-stats { gap: 26px; }
   .foot-grid { flex-direction: column; gap: 24px; }
 }
@@ -603,6 +603,20 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .comm-tab.active { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: #fff; border-color: transparent; }
 
 .forum-list { display: flex; flex-direction: column; gap: 14px; }
+
+/* 论坛排序 / 点赞 / 置顶（2026-07-16 新增） */
+.forum-sort { display: flex; gap: 8px; margin: 4px 0 14px; }
+.sort-chip { padding: 6px 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); border-radius: 999px; cursor: pointer; font-size: 13px; transition: .2s; }
+.sort-chip:hover { border-color: var(--primary); }
+.sort-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.post-actions, .rv-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.like-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 13px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); border-radius: 999px; cursor: pointer; font-size: 13px; transition: .15s; }
+.like-btn:hover { border-color: var(--primary); }
+.like-btn.liked { color: #fff; background: var(--primary-strong); border-color: var(--primary-strong); }
+.like-btn:disabled { opacity: .6; cursor: default; }
+.pin-btn { padding: 5px 13px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); border-radius: 999px; cursor: pointer; font-size: 13px; transition: .15s; }
+.pin-btn:hover { border-color: var(--gold); color: var(--gold); }
+.pin-badge { display: inline-block; margin-left: 8px; font-size: 12px; color: var(--gold); font-weight: 600; white-space: nowrap; }
 .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 20px 22px; cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s; }
 .post-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow-hover); }
 .post-title { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
@@ -923,6 +937,11 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
   /* 本季新番横向轮播卡片收窄，避免单卡过宽顶满屏幕 */
   .carousel .anime-card { flex: 0 0 158px; }
 
+  /* 本季新番轮播：手机端改为原生横向滚动，支持手指左右滑动（桌面仍用鼠标拖拽） */
+  .carousel { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .carousel::-webkit-scrollbar { display: none; }
+  .carousel-track { scroll-snap-align: start; }
+
   /* 弹窗 / 帖子卡片内边距收窄，避免手机上显得空旷或溢出 */
   .modal-body { padding: 20px 18px 26px; }
   .post-card { padding: 16px; }
@@ -945,4 +964,5 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
   .card-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
   .carousel .anime-card { flex: 0 0 140px; }
   .hero-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .search-box { display: none; }   /* 极窄屏隐藏搜索框，保证 K-ON 与导航按钮不溢出 */
 }

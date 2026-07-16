@@ -829,6 +829,8 @@
 
   /* ---------------- 横向拖拽轮播 (drag-scroll) ---------------- */
   function enableDragScroll(wrap) {
+    // 触屏设备用原生横向滚动（CSS overflow-x:auto + scroll-snap），不绑定鼠标拖拽，避免与手指滑动冲突
+    if (window.matchMedia && !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
     const track = $(".carousel-track", wrap);
     let down = false, startX = 0, sl = 0, moved = 0;
     wrap.addEventListener("mousedown", (e) => { down = true; startX = e.pageX; sl = wrap.scrollLeft; moved = 0; wrap.classList.add("dragging"); });

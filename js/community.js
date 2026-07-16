@@ -603,9 +603,18 @@
       $("#forum-list").classList.toggle("hidden", t !== "forum");
       $("#comm-hot").classList.toggle("hidden", t !== "hot");
       $("#comm-anime").classList.toggle("hidden", t !== "anime");
+      const fsb = $("#forum-sort"); if (fsb) fsb.hidden = (t !== "forum");
       if (t === "forum") renderForum();
       else if (t === "hot") renderHot();
       else renderAnimeReviews();
+    });
+    const fs = $("#forum-sort");
+    if (fs) fs.addEventListener("click", (e) => {
+      const b = e.target.closest(".sort-chip"); if (!b) return;
+      forumSort = b.dataset.sort;
+      $$(".sort-chip", fs).forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      renderForum();
     });
     document.addEventListener("click", (e) => {
       const it = e.target.closest("#mine-grid .anime-card");
@@ -629,33 +638,116 @@
   }
 
   /* ---------------- 论坛 (B) ---------------- */
+  /* ---------------- 点赞 / 置顶 辅助 ---------------- */
+  let forumSort = "new";
+  async function myForumLikeSet(postIds) {
+    const s = new Set();
+    if (!USER || !postIds.length) return s;
+    const { data } = await sb.from("forum_likes").select("post_id").in("post_id", postIds);
+    (data || []).forEach(r => s.add(r.post_id));
+    return s;
+  }
+  async function myAnimeLikeSet(commentIds) {
+    const s = new Set();
+    if (!USER || !commentIds.length) return s;
+    const { data } = await sb.from("anime_comment_likes").select("comment_id").in("comment_id", commentIds);
+    (data || []).forEach(r => s.add(r.comment_id));
+    return s;
+  }
+  async function toggleForumLike(postId, btn) {
+    if (!USER) { openIdentity(); return; }
+    const liked = btn.classList.contains("liked");
+    btn.disabled = true;
+    try {
+      if (liked) {
+        const { error } = await sb.from("forum_likes").delete().eq("post_id", postId).eq("user_id", USER.id);
+        if (error) { toast("操作失败：" + error.message); return; }
+      } else {
+        const { error } = await sb.from("forum_likes").insert({ post_id: postId, user_id: USER.id });
+        if (error) { toast("操作失败：" + error.message); return; }
+      }
+      const n = (parseInt(btn.dataset.n || "0", 10)) + (liked ? -1 : 1);
+      btn.dataset.n = n;
+      btn.classList.toggle("liked", !liked);
+      btn.querySelector(".lk-count").textContent = n;
+    } finally { btn.disabled = false; }
+  }
+  async function toggleAnimeLike(commentId, btn) {
+    if (!USER) { openIdentity(); return; }
+    const liked = btn.classList.contains("liked");
+    btn.disabled = true;
+    try {
+      if (liked) {
+        const { error } = await sb.from("anime_comment_likes").delete().eq("comment_id", commentId).eq("user_id", USER.id);
+        if (error) { toast("操作失败：" + error.message); return; }
+      } else {
+        const { error } = await sb.from("anime_comment_likes").insert({ comment_id: commentId, user_id: USER.id });
+        if (error) { toast("操作失败：" + error.message); return; }
+      }
+      const n = (parseInt(btn.dataset.n || "0", 10)) + (liked ? -1 : 1);
+      btn.dataset.n = n;
+      btn.classList.toggle("liked", !liked);
+      btn.querySelector(".lk-count").textContent = n;
+    } finally { btn.disabled = false; }
+  }
+  async function setPin(postId, pin) {
+    const { error } = await sb.rpc("set_post_pin", { p_post: postId, p_pin: pin });
+    if (error) { toast("置顶失败：" + error.message); return false; }
+    return true;
+  }
+
   async function renderForum() {
     const wrap = $("#forum-list"); if (!wrap) return;
+    const sortBar = $("#forum-sort"); if (sortBar) sortBar.hidden = false;
     if (!sb) { wrap.innerHTML = `<div class="empty">社区模块未初始化。</div>`; return; }
     if (!USER) {
       wrap.innerHTML = `<div class="empty">登录后即可发帖交流。<button class="btn btn-primary" id="forum-login" style="margin-top:10px;padding:8px 18px">登录 / 注册</button></div>`;
       const b = $("#forum-login", wrap); if (b) b.onclick = openIdentity; return;
     }
     wrap.innerHTML = `<div class="loading">加载中…</div>`;
-    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id,views,images").order("created_at", { ascending: false }).limit(50);
+    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id,views,images,like_count,is_pinned").order("created_at", { ascending: false }).limit(50);
     if (error) { wrap.innerHTML = `<div class="err">加载失败：${esc(error.message)}</div>`; return; }
     if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有帖子，点右上角「＋ 发帖」抢沙发吧～</div>`; return; }
     const ids = [...new Set(data.map(p => p.user_id))];
     const names = await fetchNames(ids);
     const { data: cs } = await sb.from("forum_comments").select("post_id").in("post_id", ids);
     const cnt = {}; (cs || []).forEach(c => cnt[c.post_id] = (cnt[c.post_id] || 0) + 1);
+    const myLikes = await myForumLikeSet(data.map(p => p.id));
+    // 排序：置顶优先，再按模式（最新=发布时间倒序 / 最热=点赞数*5+观看数 综合）
+    const sorted = data.slice().sort((a, b) => {
+      const pa = a.is_pinned ? 1 : 0, pb = b.is_pinned ? 1 : 0;
+      if (pa !== pb) return pb - pa;
+      if (forumSort === "hot") {
+        const sa = (a.like_count || 0) * 5 + (a.views || 0);
+        const sb2 = (b.like_count || 0) * 5 + (b.views || 0);
+        if (sb2 !== sa) return sb2 - sa;
+      }
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
     const canDel = (uid) => isAdmin() || (USER && USER.id === uid);
-    wrap.innerHTML = data.map(p => `
+    const adm = isAdmin();
+    wrap.innerHTML = sorted.map(p => `
       <div class="post-card" data-id="${p.id}">
         <div class="post-main">
           ${canDel(p.user_id) ? `<button class="post-del" data-del-post="${p.id}">删除</button>` : ""}
+          ${p.is_pinned ? `<span class="pin-badge">📌 置顶</span>` : ""}
           <div class="post-title">${esc(p.title)}</div>
           <div class="post-body">${esc(p.body)}</div>
           ${imagesHTML(p.images)}
           <div class="post-meta">${uLink(`<span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span>`, p.user_id)}<span class="u-link" data-uid="${p.user_id}">@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${roleTag(names[p.user_id])}${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
+          <div class="post-actions">
+            <button class="like-btn ${myLikes.has(p.id) ? "liked" : ""}" data-pid="${p.id}" data-n="${p.like_count || 0}">❤️ <span class="lk-count">${p.like_count || 0}</span></button>
+            ${adm ? `<button class="pin-btn" data-pid="${p.id}" data-pin="${p.is_pinned ? 1 : 0}">${p.is_pinned ? "取消置顶" : "置顶"}</button>` : ""}
+          </div>
         </div>
       </div>`).join("");
     $$(".post-card", wrap).forEach(c => c.onclick = () => openPost(c.dataset.id));
+    wrap.querySelectorAll(".like-btn").forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleForumLike(b.dataset.pid, b); });
+    wrap.querySelectorAll(".pin-btn").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      const ok = await setPin(b.dataset.pid, b.dataset.pin !== "1");
+      if (ok) renderForum();
+    });
     wrap.querySelectorAll("[data-del-post]").forEach(b => b.onclick = async (e) => {
       e.stopPropagation();
       if (!confirm("确定删除这条论坛帖子？")) return;
@@ -675,10 +767,12 @@
     const mask = $("#comm-mask"), modal = $("#comm-modal");
     modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="loading">加载中…</div>`;
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
-    const { data: post } = await sb.from("forum_posts").select("title,body,created_at,user_id,views,images").eq("id", id).single();
+    const { data: post } = await sb.from("forum_posts").select("title,body,created_at,user_id,views,images,like_count,is_pinned").eq("id", id).single();
     if (!post) { modal.innerHTML = `<div class="err">帖子不存在</div>`; return; }
     const { data: vres } = await sb.rpc("inc_post_view", { p_id: id });
     const views = (vres && vres[0] && vres[0].inc_post_view) || post.views || 0;
+    let liked = false;
+    if (USER) { const { data: mylk } = await sb.from("forum_likes").select("post_id").eq("post_id", id).eq("user_id", USER.id).maybeSingle(); liked = !!mylk; }
     const names = await fetchNames([post.user_id]);
     const { data: comments } = await sb.from("forum_comments").select("id,body,created_at,user_id,images").eq("post_id", id).order("created_at", { ascending: true });
     currentPostId = id;
@@ -686,12 +780,16 @@
       <button class="modal-close" id="comm-close">✕</button>
       <div class="comm-post">
         <div class="comm-post-head">
-          <div class="post-title">${esc(post.title)}</div>
+          <div class="post-title">${esc(post.title)} ${post.is_pinned ? '<span class="pin-badge">📌 置顶</span>' : ''}</div>
           ${(isAdmin() || (USER && USER.id === post.user_id)) ? `<button class="post-del" id="post-del-btn">删除</button>` : ""}
+          ${isAdmin() ? `<button class="pin-btn" id="post-pin" data-pin="${post.is_pinned ? 1 : 0}">${post.is_pinned ? "取消置顶" : "置顶"}</button>` : ""}
         </div>
         <div class="post-body" style="white-space:pre-wrap">${esc(post.body)}</div>
         ${imagesHTML(post.images)}
         <div class="post-meta">${uLink(`<span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span>`, post.user_id)}<span class="u-link" data-uid="${post.user_id}">@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${roleTag(names[post.user_id])}${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
+        <div class="post-actions">
+          <button class="like-btn ${liked ? "liked" : ""}" id="post-like" data-pid="${id}" data-n="${post.like_count || 0}">❤️ <span class="lk-count">${post.like_count || 0}</span></button>
+        </div>
       </div>
       <div class="comm-divider">评论 ${comments ? comments.length : 0}</div>
       <div id="comment-list" class="comment-list">${comments && comments.length ? comments.map(c => commentHTML(c, names[c.user_id])).join("") : `<div class="empty">还没有评论</div>`}</div>
@@ -706,6 +804,11 @@
         </div>
       </div>`;
     $("#comm-close").onclick = closeComm;
+    const likeBtn = $("#post-like"); if (likeBtn) likeBtn.onclick = () => toggleForumLike(id, likeBtn);
+    const pinBtn = $("#post-pin"); if (pinBtn) pinBtn.onclick = async () => {
+      const ok = await setPin(id, pinBtn.dataset.pin !== "1");
+      if (ok) openPost(id);
+    };
     const delBtn = $("#post-del-btn");
     if (delBtn) delBtn.onclick = async () => {
       if (!confirm("确定删除这条论坛帖子？")) return;
@@ -1047,6 +1150,7 @@
     if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有人对番剧发表评价，<button class="btn btn-primary" id="rv-empty-new" style="padding:8px 18px;margin-top:8px">去发第一条</button>～</div>`; const be = $("#rv-empty-new", wrap); if (be) be.onclick = openReviewComposer; return; }
     const ids = [...new Set(data.map(c => c.user_id))];
     const names = await fetchNames(ids);
+    const myLikes = await myAnimeLikeSet(data.map(c => c.id));
     // 取每部番的「我的评分」用于评价卡片展示评分
     const animeIds = [...new Set(data.map(c => c.anime_id))];
     const { data: colls } = await sb.from("collections").select("anime_id,rating").in("anime_id", animeIds);
@@ -1056,16 +1160,22 @@
       const prof = names[c.user_id]; const name = (prof && prof.username) || "用户";
       const rt = ratings[c.anime_id];
       const stars = rt ? "★".repeat(rt) + "☆".repeat(10 - rt) : "";
+      const liked = myLikes.has(c.id);
       return `<div class="review-card" data-anime="${c.anime_id}">
         <div class="rv-head">${uLink(`<span class="c-av">${avatarHTML(prof, c.user_id, "xs")}</span>`, c.user_id)}<span class="u-link" data-uid="${c.user_id}">@${esc(name)}</span>${roleTag(prof)}${uidTag(prof)}<span class="c-time">${timeAgo(c.created_at)}</span></div>
         <div class="rv-anime">📺 ${esc(a ? a.title : "未知番剧")}</div>
         ${rt ? `<div class="rv-score">我的评分：<b style="color:#ffce3d">${stars}</b> ${rt}/10</div>` : ""}
         ${c.body ? `<div class="rv-body">${esc(c.body)}</div>` : ""}
         ${imagesHTML(c.images)}
-        <button class="rv-comment-btn" data-anime="${c.anime_id}" data-cid="${c.id}">💬 评论 (${a ? (a.title) : ""})</button>
+        <div class="rv-actions">
+          <button class="like-btn ${liked ? "liked" : ""}" data-cid="${c.id}" data-n="${c.like_count || 0}">❤️ <span class="lk-count">${c.like_count || 0}</span></button>
+          <button class="rv-comment-btn" data-anime="${c.anime_id}" data-cid="${c.id}">💬 评论 (${a ? (a.title) : ""})</button>
+        </div>
       </div>`;
     }).join("");
     $$(".review-card", wrap).forEach(card => {
+      const lb = card.querySelector(".like-btn");
+      if (lb) lb.onclick = (e) => { e.stopPropagation(); toggleAnimeLike(lb.dataset.cid, lb); };
       // 点「评论」按钮 → 打开该番讨论区并定位到这条评价，回复将挂在其下方（楼中楼）
       const cb = card.querySelector(".rv-comment-btn");
       if (cb) cb.onclick = (e) => {
