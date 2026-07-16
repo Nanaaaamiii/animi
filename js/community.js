@@ -1677,8 +1677,19 @@
   // CSS 默认（380×520 / right:4% / top:84px），并清除本机坏值——避免面板被压成 0 或移出屏幕后
   // 「永久消失」（一旦变成 0 尺寸，编辑/重置按钮也点不到，形成死循环）。
   const ANN_MIN_W = 240, ANN_MIN_H = 160, ANN_MAX_W = 1200, ANN_MAX_H = 1400, ANN_POS_LIMIT = 10000;
+  // 移动端（窄屏）判定：公告栏在手机上改为静态全宽，不应用桌面悬浮布局
+  function isMobileLayout() {
+    try { return window.matchMedia("(max-width: 768px)").matches; } catch (e) { return false; }
+  }
   function applyAnnounceLayout(panel) {
     if (!panel) return;
+    if (isMobileLayout()) {
+      // 移动端：清除桌面保存的内联定位，交给 CSS 媒体查询（position:static !important 全宽自适应高度）
+      panel.style.position = "static";
+      panel.style.left = "auto"; panel.style.top = "auto";
+      panel.style.right = "auto"; panel.style.width = "auto"; panel.style.height = "auto";
+      return;
+    }
     let d = (ANN_LAYOUT && ANN_LAYOUT.left != null && ANN_LAYOUT.top != null && ANN_LAYOUT.width != null && ANN_LAYOUT.height != null)
       ? ANN_LAYOUT
       : (() => { try { const raw = localStorage.getItem(ANN_LAYOUT_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } })();
@@ -1702,6 +1713,7 @@
   // 保存布局到 Supabase（写当前公告行）+ 本机兜底；仅站长/管理员可写
   async function saveAnnounceLayout(panel) {
     if (!panel || !isAdmin() || !sb) return;
+    if (isMobileLayout()) return; // 移动端不持久化布局（面板为静态全宽，悬浮布局无意义）
     const r = panel.getBoundingClientRect();
     // 跳过畸形尺寸（如面板被压成 0/极小），避免把坏值写进数据库/本机，导致下次加载直接消失
     if (!(r.width >= 120 && r.height >= 100)) return;
@@ -1747,6 +1759,7 @@
     // 拖动：在公告标题栏按下（非按钮）即拖动；仅站长/管理员
     panel.addEventListener("mousedown", (e) => {
       if (!isAdmin()) return;
+      if (isMobileLayout()) return; // 移动端不启用拖动（面板为静态全宽）
       const head = e.target.closest(".ac-head");
       if (!head) return;                 // 只有抓标题栏才能拖
       if (e.target.closest("button")) return; // 编辑按钮不触发拖动

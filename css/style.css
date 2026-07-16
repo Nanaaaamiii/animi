@@ -895,3 +895,54 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
   .game-setup-row{gap:10px;}
   .game-start{width:100%;margin:6px 0 0;}
 }
+
+/* ============================================================
+   移动端适配（max-width: 768px）—— 仅作用于窄屏，PC 端（>768px）完全不受影响
+   ============================================================ */
+@media (max-width: 768px) {
+  .wrap { padding: 0 16px; }
+  .section { padding: 40px 0; }
+  .section-head { margin-bottom: 20px; }
+  .hero { padding: 56px 0 44px; }
+
+  /* 公告栏：桌面端是绝对定位的悬浮挂件（right:4% / top:84px / 380×520），
+     在手机上 380px 比屏幕还宽，会盖住下方所有板块（"挤在一块"的主因）。
+     移动端改为静态、全宽、自适应高度，并用 !important 覆盖 JS 写入的内联定位样式。 */
+  .announce-panel {
+    position: static !important;
+    width: auto !important; height: auto !important;
+    top: auto !important; right: auto !important; left: auto !important;
+    margin: 18px 0 0;
+    resize: none !important;
+    box-shadow: var(--shadow);
+  }
+
+  /* 动画库 / 收藏等卡片网格：手机上两列更紧凑（桌面仍是多列自适应） */
+  .card-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+
+  /* 本季新番横向轮播卡片收窄，避免单卡过宽顶满屏幕 */
+  .carousel .anime-card { flex: 0 0 158px; }
+
+  /* 弹窗 / 帖子卡片内边距收窄，避免手机上显得空旷或溢出 */
+  .modal-body { padding: 20px 18px 26px; }
+  .post-card { padding: 16px; }
+
+  /* 筛选条与芯片更紧凑 */
+  .filter-bar { gap: 8px; margin-bottom: 20px; }
+  .f-chip { padding: 6px 12px; font-size: 13px; }
+
+  /* 排行榜信息行在窄屏不挤 */
+  .rank-item { gap: 12px; padding: 12px 14px; }
+  .rank-info .t { font-size: 15px; }
+
+  /* 详情弹窗事实卡两列即可（避免单行过窄） */
+  .m-facts { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+}
+
+/* 超窄屏（≤420px）进一步收一点，防止顶栏/卡片溢出 */
+@media (max-width: 420px) {
+  .wrap { padding: 0 12px; }
+  .card-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+  .carousel .anime-card { flex: 0 0 140px; }
+  .hero-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
