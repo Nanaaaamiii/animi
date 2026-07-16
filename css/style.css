@@ -172,6 +172,35 @@ header.nav {
   position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
   border: none; background: rgba(0,0,0,.45); color: #fff; cursor: pointer; font-size: 12px; z-index: 2;
 }
+.op-cell { position: relative; }
+
+/* ---------- 我的观看进度（每部动画看到第几集） ---------- */
+.episode-box { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.ep-head { font-weight: 800; font-size: 15px; margin-bottom: 12px; }
+.ep-controls { display: flex; align-items: center; gap: 12px; }
+.ep-step {
+  width: 38px; height: 38px; flex: none; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font-size: 22px; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; transition: .2s;
+}
+.ep-step:hover { border-color: var(--accent); color: var(--accent); }
+.ep-count { display: flex; align-items: baseline; gap: 6px; }
+.ep-input {
+  width: 64px; text-align: center; font-size: 20px; font-weight: 800; padding: 6px 4px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--text);
+}
+.ep-of { color: var(--text-faint); font-size: 14px; }
+.ep-bar { height: 8px; border-radius: 999px; background: var(--bg-soft); margin: 12px 0 10px; overflow: hidden; }
+.ep-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #ffb3ba); transition: width .3s ease; }
+.ep-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ep-btn { padding: 7px 14px !important; font-size: 13px; }
+.ep-status { font-size: 12px; color: var(--text-faint); margin-left: auto; }
+.ep-total-row { margin-top: 10px; font-size: 13px; color: var(--text-soft); }
+.ep-input-sm {
+  width: 72px; padding: 5px 6px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-soft); color: var(--text); text-align: center;
+}
+.ep-login { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--text-soft); font-size: 14px; }
 
 /* ---------- 私信 收件箱 / 会话 ---------- */
 .dm-actions { display: flex; gap: 8px; margin: 12px 0; align-items: center; }

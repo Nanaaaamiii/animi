@@ -607,6 +607,7 @@
         </div>
         <div class="m-summary"><h4>剧情简介</h4>${a.summary ? esc(a.summary) : (loading ? "正在从 Bangumi 加载…" : "（暂无简介）")}</div>
         <div class="collect-box" id="collect-box"></div>
+        <div class="episode-box" id="episode-box"></div>
       </div>`;
     $("#modal-close").onclick = closeModal;
     if (!loading && a.rating != null) countUp($("#modal .modal-rate span"), parseFloat(a.rating) || 0, 900, 1);
@@ -619,6 +620,7 @@
     $("#modal-mask").classList.add("open");
     document.body.style.overflow = "hidden";
     setupCollectBox(a);
+    if (window.Community) Community.renderEpisodeBox(a);
     if (window.Community) Community.onModalOpen(a);
     refreshLiveRating(a);   // 详情打开时实时拉取 Bangumi 最新评分（拉不到则用烘焙值）
   }

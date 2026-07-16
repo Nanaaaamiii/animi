@@ -1253,6 +1253,85 @@
     const b = $("#cb-login", box); if (b) b.onclick = () => openIdentity();
   }
 
+  // 「我的观看进度」：记录每部动画看到第几集（UI 在详情页 collect-box 下方）
+  async function renderEpisodeBox(a) {
+    const box = $("#episode-box"); if (!box) return;
+    if (!sb) { box.innerHTML = `<div class="empty">社区模块未初始化。</div>`; return; }
+    if (!USER) {
+      box.innerHTML = `<div class="ep-login"><span>📺 登录后记录你看到了第几集</span>
+        <button class="btn btn-primary" id="ep-login" style="padding:8px 16px">登录 / 注册</button></div>`;
+      const b = $("#ep-login", box); if (b) b.onclick = () => openIdentity();
+      return;
+    }
+    let row = null;
+    try { const { data } = await sb.from("episode_progress").select("*").eq("user_id", USER.id).eq("anime_id", a.id).maybeSingle(); row = data; }
+    catch (e) { /* 离线/被拦截：默认 0 */ }
+    let watched = (row && row.watched != null) ? (+row.watched || 0) : 0;
+    // 总集数：优先烘焙数据 a.episodes，其次已存 total
+    let total = (a.episodes != null && !isNaN(+a.episodes) && +a.episodes > 0) ? +a.episodes
+              : (row && row.total != null ? (+row.total || null) : null);
+    const totalKnown = total != null && !isNaN(total) && total > 0;
+    const pct = totalKnown ? Math.min(100, Math.round(watched / total * 100)) : 0;
+
+    box.innerHTML = `
+      <div class="ep-head">📺 我的观看进度</div>
+      <div class="ep-controls">
+        <button class="ep-step" id="ep-minus" aria-label="上一集">-</button>
+        <div class="ep-count">
+          <input type="number" id="ep-watched" class="ep-input" min="0" value="${watched}">
+          <span class="ep-of">/ ${totalKnown ? `<span id="ep-total">${total}</span>` : `?`} 集</span>
+        </div>
+        <button class="ep-step" id="ep-plus" aria-label="下一集">+</button>
+      </div>
+      <div class="ep-bar"><div class="ep-bar-fill" id="ep-fill" style="width:${pct}%"></div></div>
+      <div class="ep-actions">
+        ${totalKnown ? `<button class="btn btn-ghost ep-btn" id="ep-done">标记看完</button>` : ``}
+        <button class="btn btn-ghost ep-btn" id="ep-reset">重置</button>
+        <span class="ep-status" id="ep-status"></span>
+      </div>
+      ${!totalKnown ? `<div class="ep-total-row">总集数：<input type="number" id="ep-total-input" class="ep-input-sm" min="1" placeholder="未知"> 集</div>` : ``}
+    `;
+
+    const wInput = $("#ep-watched", box);
+    const fill = $("#ep-fill", box);
+    const status = $("#ep-status", box);
+    let saveTimer = null;
+    const markDirty = () => { if (status) status.textContent = "未保存"; clearTimeout(saveTimer); saveTimer = setTimeout(save, 500); };
+    const clamp = () => {
+      let w = parseInt(wInput.value, 10); if (isNaN(w) || w < 0) w = 0;
+      if (totalKnown && w > total) w = total;
+      wInput.value = w; watched = w;
+      if (fill) fill.style.width = (totalKnown && total > 0) ? Math.min(100, Math.round(watched / total * 100)) + "%" : "0%";
+      markDirty();
+    };
+    const save = async () => {
+      try {
+        const payload = { user_id: USER.id, anime_id: a.id, watched: watched };
+        if (totalKnown) payload.total = total;
+        else {
+          const ti = $("#ep-total-input", box);
+          const tv = ti && ti.value ? parseInt(ti.value, 10) : null;
+          payload.total = (tv && tv > 0) ? tv : null;
+        }
+        const { error } = await sb.from("episode_progress").upsert(payload, { onConflict: "user_id,anime_id" });
+        if (error) { if (status) status.textContent = "保存失败"; toast("保存失败：" + error.message); }
+        else if (status) status.textContent = "已保存 ✓";
+      } catch (e) { if (status) status.textContent = "保存失败"; }
+    };
+    wInput.addEventListener("input", clamp);
+    wInput.addEventListener("blur", save);
+    $("#ep-minus", box).onclick = () => { wInput.value = Math.max(0, (parseInt(wInput.value, 10) || 0) - 1); clamp(); };
+    $("#ep-plus", box).onclick = () => { const mx = totalKnown ? total : 99999; wInput.value = Math.min(mx, (parseInt(wInput.value, 10) || 0) + 1); clamp(); };
+    const doneBtn = $("#ep-done", box); if (doneBtn) doneBtn.onclick = () => { wInput.value = total; clamp(); };
+    $("#ep-reset", box).onclick = () => { wInput.value = 0; clamp(); };
+    const ti = $("#ep-total-input", box);
+    if (ti) ti.addEventListener("input", () => {
+      const tv = parseInt(ti.value, 10);
+      if (fill && tv > 0) fill.style.width = Math.min(100, Math.round(watched / tv * 100)) + "%";
+      markDirty();
+    });
+  }
+
   async function renderMine() {
     const grid = $("#mine-grid"), stats = $("#mine-stats"), filter = $("#mine-filter"), empty = $("#mine-empty");
     if (!grid) return;
@@ -1488,8 +1567,10 @@
       const ba = $("#op-add", host); if (ba) ba.onclick = openOwnerPickAdder;
       return;
     }
-    host.innerHTML = anime.map((a, i) => ownerCard(a) +
-      (isAdmin() ? `<button class="op-remove" data-id="${a.id}" title="移出站长推荐">✕</button>` : "")).join("") +
+    // 注意：op-remove 是 position:absolute，必须包在 position:relative 的 .op-cell 里，
+    // 否则会锚定到整块网格、所有 ✕ 挤在角落（之前"看不到删除键"的根因）。
+    host.innerHTML = anime.map((a) => `<div class="op-cell">${ownerCard(a)}` +
+      (isAdmin() ? `<button class="op-remove" data-id="${a.id}" title="移出站长推荐">✕</button>` : "") + `</div>`).join("") +
       (isAdmin() ? `<div style="grid-column:1/-1;text-align:center;margin-top:8px"><button class="btn btn-ghost" id="op-add">＋ 添加 / 管理</button></div>` : "");
     host.querySelectorAll(".anime-card").forEach(c => c.onclick = () => openAnimeDetail(c.dataset.id));
     host.querySelectorAll(".op-remove").forEach(b => b.onclick = async (e) => {
@@ -1926,7 +2007,7 @@
   window.Community = {
     init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum, openReviewComposer,
     searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot,
-    renderAnnouncement
+    renderAnnouncement, renderEpisodeBox
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
