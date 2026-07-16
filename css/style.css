@@ -355,7 +355,7 @@ header.nav {
 @keyframes rippleAnim { to { transform: translate(-50%,-50%) scale(9); opacity: 0; } }
 
 /* ---------- 横向拖拽轮播 (drag-scroll) ---------- */
-.carousel { overflow: hidden; cursor: grab; user-select: none; touch-action: pan-y; }
+.carousel { overflow: hidden; cursor: grab; user-select: none; touch-action: pan-x; }
 .carousel:active { cursor: grabbing; }
 .carousel-track { display: flex; gap: 20px; padding: 6px 2px 14px; }
 .carousel .anime-card { flex: 0 0 200px; }
@@ -938,7 +938,7 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
   .carousel .anime-card { flex: 0 0 158px; }
 
   /* 本季新番轮播：手机端改为原生横向滚动，支持手指左右滑动（桌面仍用鼠标拖拽） */
-  .carousel { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .carousel { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; scrollbar-width: none; touch-action: pan-x; overscroll-behavior-x: contain; }
   .carousel::-webkit-scrollbar { display: none; }
   .carousel-track { scroll-snap-align: start; }
 
