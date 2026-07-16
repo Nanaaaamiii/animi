@@ -14,18 +14,26 @@
   const STAR = "★";
 
   /* ---------------- 等级配置 ---------------- */
-  // 累计经验达到该值即升到对应等级（索引=等级-1）；Lv6 为满级
-  const LEVEL_EXP = [0, 50, 130, 250, 420, 650];
-  const LEVEL_MAX = LEVEL_EXP.length; // 6
+  // 等级：每 200 EXP 升 1 级，线性、无上限（exp 0→Lv1，200→Lv2，400→Lv3 …）
+  const EXP_PER_LEVEL = 200;
+  // 社区互动经验：每次互动 +10 EXP，单日上限 50 EXP（约 5 次/天）
+  const INTERACT_EXP = 10;
+  const INTERACT_DAILY_CAP = 50;
+  // 单日社区互动经验累计（存 localStorage，按日期分桶，跨天自动清零）
+  const interactKey = () => "animi_interact_exp_" + todayStr();
+  function interactToday() {
+    try { return parseInt(localStorage.getItem(interactKey()) || "0", 10) || 0; } catch (e) { return 0; }
+  }
+  function addInteractToday(n) {
+    try { const v = interactToday() + n; localStorage.setItem(interactKey(), String(v)); } catch (e) {}
+  }
   function levelInfo(exp) {
     exp = exp || 0;
-    let lv = 1;
-    for (let i = 0; i < LEVEL_EXP.length; i++) if (exp >= LEVEL_EXP[i]) lv = i + 1;
-    const max = lv >= LEVEL_MAX;
-    const start = LEVEL_EXP[lv - 1];
-    const next = max ? start : LEVEL_EXP[lv];
-    const pct = max ? 100 : Math.max(0, Math.min(100, Math.round((exp - start) / (next - start) * 100)));
-    return { lv, start, next, pct, max, exp };
+    const lv = Math.floor(exp / EXP_PER_LEVEL) + 1;
+    const start = (lv - 1) * EXP_PER_LEVEL;
+    const next = lv * EXP_PER_LEVEL;
+    const pct = Math.max(0, Math.min(100, Math.round((exp - start) / (next - start) * 100)));
+    return { lv, start, next, pct, max: false, exp };
   }
   const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -248,7 +256,7 @@
     const p = USER.profile; if (!p) return;
     const today = todayStr();
     if (p.last_checkin === today) { toast("今天已经签到啦～"); return; }
-    const newExp = (p.exp || 0) + 10;
+    const newExp = (p.exp || 0) + 20;
     const beforeLv = levelInfo(p.exp || 0).lv;
     const newLv = levelInfo(newExp).lv;
     const { error } = await sb.from("profiles").update({ exp: newExp, level: newLv, last_checkin: today }).eq("id", USER.id);
@@ -256,20 +264,25 @@
     p.exp = newExp; p.level = newLv; p.last_checkin = today;
     renderUserChip();
     openProfile(USER.id, $("#comm-mask"), $("#comm-modal"));
-    toast(newLv > beforeLv ? "签到成功！升级到 Lv" + newLv + " 🎉" : "签到成功！EXP +10");
+    toast(newLv > beforeLv ? "签到成功！升级到 Lv" + newLv + " 🎉" : "签到成功！EXP +20");
   }
 
-  // 发帖 / 评论等互动给予经验（让等级条有成长感）
-  async function awardExp(n) {
+  // 社区互动（评论/点赞/发帖等）每次 +10 EXP，单日上限 50 EXP；达上限不再加并提示
+  async function awardExp() {
     if (!USER || !USER.profile) return;
-    const newExp = (USER.profile.exp || 0) + n;
+    if (interactToday() >= INTERACT_DAILY_CAP) {
+      toast("今日社区互动经验已封顶（50 EXP）"); return;
+    }
+    const gain = INTERACT_EXP;
+    const newExp = (USER.profile.exp || 0) + gain;
     const newLv = levelInfo(newExp).lv;
     const { error } = await sb.from("profiles").update({ exp: newExp, level: newLv }).eq("id", USER.id);
     if (!error) {
       const before = USER.profile.level;
       USER.profile.exp = newExp; USER.profile.level = newLv;
+      addInteractToday(gain);
       renderUserChip();
-      if (newLv > before) toast("升级到 Lv" + newLv + " 🎉");
+      toast(newLv > before ? "升级到 Lv" + newLv + " 🎉" : "社区互动 +10 EXP");
     }
   }
 
@@ -378,11 +391,11 @@
         <div class="uid-line">UID：<b>${p.uid != null ? p.uid : "—"}</b>${roleTag(p)}</div>
         ${statsRow}
         <div class="lv-line">
-          <span class="lv-badge">${li.max ? "Lv" + li.lv + " · 满级" : "Lv" + li.lv}</span>
+          <span class="lv-badge">Lv${li.lv}</span>
           <span class="lv-exp">${li.max ? "EXP " + li.exp : "EXP " + li.exp + " / " + li.next}</span>
         </div>
         <div class="exp-bar"><div class="exp-fill" style="width:${li.pct}%"></div></div>
-        <button class="btn btn-primary" id="checkin-btn" style="width:100%;justify-content:center;margin-top:10px">${signed ? "今日已签到 ✓" : "每日签到 +10 EXP"}</button>
+        <button class="btn btn-primary" id="checkin-btn" style="width:100%;justify-content:center;margin-top:10px">${signed ? "今日已签到 ✓" : "每日签到 +20 EXP"}</button>
         <div class="cb-row" style="margin-top:12px"><span class="cb-label">昵称</span>
           <input id="id-name" class="auth-input" value="${esc(p.username || "")}" placeholder="给自己起个名字" maxlength="20"/></div>
         <div class="cb-row"><span class="cb-label">简介</span>
@@ -665,6 +678,7 @@
       } else {
         const { error } = await sb.from("forum_likes").insert({ post_id: postId, user_id: USER.id });
         if (error) { toast("操作失败：" + error.message); return; }
+        await awardExp();
       }
       const n = (parseInt(btn.dataset.n || "0", 10)) + (liked ? -1 : 1);
       btn.dataset.n = n;
@@ -683,6 +697,7 @@
       } else {
         const { error } = await sb.from("anime_comment_likes").insert({ comment_id: commentId, user_id: USER.id });
         if (error) { toast("操作失败：" + error.message); return; }
+        await awardExp();
       }
       const n = (parseInt(btn.dataset.n || "0", 10)) + (liked ? -1 : 1);
       btn.dataset.n = n;
@@ -901,7 +916,7 @@
         if (imgUrls.length) row.images = imgUrls;
         const { error } = await sb.from("forum_posts").insert(row);
         if (error) { $("#post-err").textContent = "发布失败：" + error.message; return; }
-        await awardExp(5); closeComm(); renderForum(); toast("已发布 +5 EXP");
+        await awardExp(); closeComm(); renderForum();
       } catch (e) {
         $("#post-err").textContent = "图片上传失败：" + (e.message || e);
       } finally { sendBtn.disabled = false; sendBtn.textContent = oldTxt; }
@@ -1013,7 +1028,7 @@
       if (currentReplyTo) row.parent_id = currentReplyTo;
       const { error } = await sb.from("anime_comments").insert(row);
       if (error) { toast("发送失败：" + error.message); return false; }
-      await awardExp(2);
+      await awardExp();
       openAnimeDiscussion(animeId, title);
       return true;
     });
@@ -1117,7 +1132,7 @@
         if (images.length) row.images = images;
         const { error } = await sb.from("anime_comments").insert(row);
         if (error) { toast("发布失败：" + error.message); return false; }
-        await awardExp(5); toast("已发布 +5 EXP");
+        await awardExp();
         closeComm(); await renderAnimeReviews();
         return true;
       });
