@@ -8,7 +8,7 @@
   const WEEK = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const WEEK_EN = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
   // 免 VPN：Bangumi 公开 API 经 Cloudflare Worker 反代（配置见 deploy/cloudflare_worker.js）
-  const BGM_PROXY = "https://k-on.1770737253.workers.dev/bgm";
+  const BGM_PROXY = "https://k-on.eu.cc/bgm";
 
   // 封面渐变色板（按 id 取色，保证稳定 & 美观）
   const PALETTES = [
