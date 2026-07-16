@@ -7,6 +7,8 @@
   const DATA = window.ANIME_DATA || [];
   const WEEK = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const WEEK_EN = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  // 免 VPN：Bangumi 公开 API 经 Cloudflare Worker 反代（配置见 deploy/cloudflare_worker.js）
+  const BGM_PROXY = "https://k-on.1770737253.workers.dev/bgm";
 
   // 封面渐变色板（按 id 取色，保证稳定 & 美观）
   const PALETTES = [
@@ -177,7 +179,7 @@
       const finish = v => { if (done) return; done = true; if (v) _metaCache.set(a.id, v); resolve(v); };
       const to = setTimeout(() => finish(null), 2600);
       try {
-        fetch("https://api.bgm.tv/subject/" + a.id, { headers: { "Accept": "application/json" } })
+        fetch(BGM_PROXY + "/subject/" + a.id, { headers: { "Accept": "application/json" } })
           .then(r => r.ok ? r.json() : null)
           .then(d => {
             clearTimeout(to);
@@ -643,7 +645,7 @@
       }
     };
     try {
-      fetch("https://api.bgm.tv/subject/" + a.id + "?responseGroup=large", { headers: { "Accept": "application/json" } })
+      fetch(BGM_PROXY + "/subject/" + a.id + "?responseGroup=large", { headers: { "Accept": "application/json" } })
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (d && d.rating && d.rating.score != null) apply(d.rating.score);
