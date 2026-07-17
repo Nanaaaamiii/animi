@@ -1156,26 +1156,74 @@
     if (next) next.onclick = () => { if (biliPage < totalPages - 1) { biliPage++; paintBiliPage(); } };
   }
   // 动画制作动态：读 Supabase news 表（由 collect_news.py 从 RSS / Twitter(RSSHub) 同步）
+  // 动画制作动态：一次性拉取后前端分页，每页 5 条（推文 / 资讯流）
+  let newsAll = [];
+  let newsPage = 0;
+  const NEWS_PAGE_SIZE = 5;
   async function renderNewsFeed() {
     const box = $("#news-feed"), empty = $("#news-feed-empty");
     if (!box) return;
     const sb = window.Community && window.Community.sb;
-    if (!sb) { if (empty) empty.hidden = false; return; }
+    if (!sb) { if (empty) empty.hidden = false; newsAll = []; paintNewsPage(); return; }
     try {
-      const { data, error } = await sb.from(NEWS_TABLE).select("*").order("published_at", { ascending: false }).limit(40);
-      if (error || !data || !data.length) { if (empty) empty.hidden = false; return; }
+      const { data, error } = await sb.from(NEWS_TABLE).select("*").order("published_at", { ascending: false }).limit(200);
+      if (error || !data || !data.length) { if (empty) empty.hidden = false; newsAll = []; paintNewsPage(); return; }
+      newsAll = data; newsPage = 0;
       if (empty) empty.hidden = true;
-      box.innerHTML = data.map(n => `
-        <a class="news-item" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
-          ${n.image ? `<img class="news-thumb" src="${esc(n.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ""}
-          <div class="news-body">
+      paintNewsPage();
+    } catch (e) { if (empty) empty.hidden = false; newsAll = []; paintNewsPage(); }
+  }
+  function paintNewsPage() {
+    const box = $("#news-feed"), pager = $("#news-feed-pager");
+    const list = newsAll || [];
+    if (!box) return;
+    if (!list.length) { box.innerHTML = ""; if (pager) pager.innerHTML = ""; return; }
+    const totalPages = Math.max(1, Math.ceil(list.length / NEWS_PAGE_SIZE));
+    if (newsPage >= totalPages) newsPage = totalPages - 1;
+    if (newsPage < 0) newsPage = 0;
+    const items = list.slice(newsPage * NEWS_PAGE_SIZE, newsPage * NEWS_PAGE_SIZE + NEWS_PAGE_SIZE);
+    box.innerHTML = items.map((n, i) => `
+      <div class="news-item" data-idx="${newsPage * NEWS_PAGE_SIZE + i}">
+        ${n.image ? `<img class="news-thumb" src="${esc(n.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ""}
+        <div class="news-body">
           <div class="news-source">${esc(n.source || "资讯")}${n.author ? " · " + esc(n.author) : ""}</div>
           <div class="news-title">${esc(n.title_cn || n.title)}</div>
           ${n.summary_cn || n.summary ? `<div class="news-summary">${esc(n.summary_cn || n.summary)}</div>` : ""}
-            <div class="news-time">${timeAgo(n.published_at)}</div>
-          </div>
-        </a>`).join("");
-    } catch (e) { if (empty) empty.hidden = false; }
+          <div class="news-time">${timeAgo(n.published_at)}</div>
+        </div>
+      </div>`).join("");
+    box.querySelectorAll(".news-item").forEach(el => el.addEventListener("click", () => openNewsModal(newsAll[+el.dataset.idx])));
+    if (!pager) return;
+    if (totalPages <= 1) { pager.innerHTML = ""; return; }
+    pager.innerHTML = `
+      <button class="news-pg-btn" id="news-prev" ${newsPage <= 0 ? "disabled" : ""}>‹ 上一页</button>
+      <span class="news-pg-info">第 ${newsPage + 1} / ${totalPages} 页</span>
+      <button class="news-pg-btn" id="news-next" ${newsPage >= totalPages - 1 ? "disabled" : ""}>下一页 ›</button>`;
+    const prev = $("#news-prev"), next = $("#news-next");
+    if (prev) prev.onclick = () => { if (newsPage > 0) { newsPage--; paintNewsPage(); } };
+    if (next) next.onclick = () => { if (newsPage < totalPages - 1) { newsPage++; paintNewsPage(); } };
+  }
+  // 点开资讯：站内弹窗展示中文，不再跳出到英文 ANN 站外
+  function openNewsModal(n) {
+    if (!n) return;
+    const el = $("#modal");
+    const hero = n.image ? `<div class="modal-news-hero" style="background-image:url('${esc(n.image)}')"></div>` : "";
+    el.innerHTML = `
+      <button class="modal-close" id="news-modal-close">✕</button>
+      <div class="modal-news">
+        ${hero}
+        <div class="m-news-source">${esc(n.source || "资讯")}${n.author ? " · " + esc(n.author) : ""} · ${timeAgo(n.published_at)}</div>
+        <div class="m-news-title">${esc(n.title_cn || n.title)}</div>
+        ${n.title_cn && n.title && n.title_cn !== n.title ? `<div class="m-news-title-en">${esc(n.title)}</div>` : ""}
+        <div class="m-news-summary">${esc(n.summary_cn || n.summary || "（暂无简介）")}</div>
+        <div class="m-news-foot">
+          ${n.url ? `<a class="news-origin" href="${esc(n.url)}" target="_blank" rel="noopener">查看原文 ↗</a>` : ""}
+          <span class="m-news-note">译文由 AI 生成，仅供参考</span>
+        </div>
+      </div>`;
+    const c = $("#news-modal-close"); if (c) c.addEventListener("click", closeModal);
+    $("#modal-mask").classList.add("open");
+    document.body.style.overflow = "hidden";
   }
   async function renderNews() {
     await renderNewsBili(false);   // 默认静态 JSON（保证可用，无需联网即可看历史投稿）
