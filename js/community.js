@@ -1350,12 +1350,14 @@
     if (error) { grid.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
     let list = (data || []).map(c => ({ a: window.ANIME_DATA.find(x => x.id === c.anime_id), c })).filter(x => x.a);
 
-    // 排序：收藏时间 / 番剧评分
+    // 排序：收藏时间 / 番剧评分（均支持升降序切换）
     const sortMode = window.__mineSort || "time";      // time | rating
-    const sortDir = window.__mineSortDir || "desc";    // desc:新→旧 | asc:旧→新
+    const sortDir = window.__mineSortDir || "desc";    // desc | asc
+    console.log("[Animi] 排序执行:", sortMode, sortDir, "共", list.length, "条收藏");
     list.sort((x, y) => {
       if (sortMode === "rating") {
-        return (y.a.rating || 0) - (x.a.rating || 0);   // 番剧评分：高→低
+        const diff = (y.a.rating || 0) - (x.a.rating || 0);
+        return sortDir === "asc" ? -diff : diff;       // 番剧评分：默认高→低，asc 反转
       }
       const tx = new Date(x.c.created_at).getTime(), ty = new Date(y.c.created_at).getTime();
       return sortDir === "asc" ? tx - ty : ty - tx;     // 收藏时间
@@ -1367,20 +1369,22 @@
     stats.innerHTML = STATUS_ORDER.map(k => `<div class="mine-stat"><b>${counts[k]}</b><span>${STATUS[k]}</span></div>`).join("");
     filter.innerHTML = `<button class="f-chip ${f === "all" ? "active" : ""}" data-f="all">全部</button>` + STATUS_ORDER.map(k => `<button class="f-chip ${f === k ? "active" : ""}" data-f="${k}">${STATUS[k]} ${counts[k]}</button>`).join("");
 
-    // 排序栏（收藏时间 / 番剧评分）
+    // 排序栏（收藏时间 / 番剧评分，均支持升降序切换）
     const sortEl = $("#mine-sort");
     if (sortEl) {
       const timeLabel = "收藏时间" + (sortMode === "time" ? (sortDir === "asc" ? " ↑" : " ↓") : "");
+      const ratingLabel = "番剧评分" + (sortMode === "rating" ? (sortDir === "asc" ? " ↑" : " ↓") : "");
       sortEl.innerHTML = `<span class="sort-label">排序</span>` +
         `<button class="sort-chip ${sortMode === "time" ? "active" : ""}" data-sort="time">${timeLabel}</button>` +
-        `<button class="sort-chip ${sortMode === "rating" ? "active" : ""}" data-sort="rating">番剧评分</button>`;
+        `<button class="sort-chip ${sortMode === "rating" ? "active" : ""}" data-sort="rating">${ratingLabel}</button>`;
       sortEl.querySelectorAll(".sort-chip").forEach(b => b.onclick = () => {
         const k = b.dataset.sort;
-        if (k === "time") {
-          if (window.__mineSort === "time") window.__mineSortDir = window.__mineSortDir === "asc" ? "desc" : "asc";
-          else { window.__mineSort = "time"; window.__mineSortDir = "desc"; }
+        if (window.__mineSort === k) {
+          // 同一模式再次点击：切换方向
+          window.__mineSortDir = window.__mineSortDir === "asc" ? "desc" : "asc";
         } else {
-          window.__mineSort = "rating";
+          window.__mineSort = k;
+          window.__mineSortDir = "desc";  // 切换模式时默认降序
         }
         renderMine();
       });
