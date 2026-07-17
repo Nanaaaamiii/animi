@@ -26,7 +26,7 @@
     ada: {
       name: "安达",
       color: "#5b7dbd",
-      avatar: "🔵",
+      avatar: "img/ada-front.png",
       system: `你是「安达」，来自《安达与岛村》。
 
 【性格】
@@ -53,7 +53,7 @@
     shima: {
       name: "岛村",
       color: "#c9956a",
-      avatar: "🟤",
+      avatar: "img/shima-front.png",
       system: `你是「岛村」，来自《安达与岛村》。
 
 【性格】
@@ -182,6 +182,14 @@
   }
 
   // ---- UI 渲染 ----
+  // 角色头像：若 avatar 是图片路径则用 <img>，否则回退 emoji 文字
+  function avatarHTML(ch) {
+    if (ch && ch.avatar && /\.(png|jpe?g|gif|webp|svg)$/i.test(ch.avatar)) {
+      return `<span class="msg-avatar"><img class="msg-avatar-img" src="${esc(ch.avatar)}" alt="${esc(ch.name || "")}"></span>`;
+    }
+    return `<span class="msg-avatar">${esc((ch && ch.avatar) || "?")}</span>`;
+  }
+
   function appendMsg(role, charKey, text) {
     const div = document.createElement("div");
     div.className = "chat-msg " + role;
@@ -189,7 +197,7 @@
       ? '<span class="msg-avatar">👤</span>'
       : role === "system"
         ? '<span class="msg-avatar">💡</span>'
-        : `<span class="msg-avatar">${esc(CHARACTERS[charKey]?.avatar || "?")}</span>`;
+        : avatarHTML(CHARACTERS[charKey]);
     div.innerHTML = `${avatar}<span class="msg-bubble">${esc(text)}</span>`;
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
@@ -201,7 +209,7 @@
     div.className = "chat-msg assistant";
     const ch = CHARACTERS[currentChar];
     div.innerHTML =
-      `<span class="msg-avatar">${esc(ch.avatar)}</span>` +
+      avatarHTML(ch) +
       `<span class="msg-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></span>`;
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
