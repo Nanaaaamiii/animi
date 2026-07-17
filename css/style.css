@@ -638,6 +638,7 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .sort-chip { padding: 6px 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); border-radius: 999px; cursor: pointer; font-size: 13px; transition: .2s; }
 .sort-chip:hover { border-color: var(--primary); }
 .sort-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.sort-label { font-size: 13px; color: var(--text-faint); font-weight: 700; margin-right: 2px; }
 .post-actions, .rv-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .like-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 13px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); border-radius: 999px; cursor: pointer; font-size: 13px; transition: .15s; }
 .like-btn:hover { border-color: var(--primary); }

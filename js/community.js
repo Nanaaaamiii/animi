@@ -1349,12 +1349,43 @@
     const { data, error } = await sb.from("collections").select("*").eq("user_id", USER.id);
     if (error) { grid.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
     let list = (data || []).map(c => ({ a: window.ANIME_DATA.find(x => x.id === c.anime_id), c })).filter(x => x.a);
-    list.sort((x, y) => new Date(y.c.created_at) - new Date(x.c.created_at));
+
+    // 排序：收藏时间 / 番剧评分
+    const sortMode = window.__mineSort || "time";      // time | rating
+    const sortDir = window.__mineSortDir || "desc";    // desc:新→旧 | asc:旧→新
+    list.sort((x, y) => {
+      if (sortMode === "rating") {
+        return (y.a.rating || 0) - (x.a.rating || 0);   // 番剧评分：高→低
+      }
+      const tx = new Date(x.c.created_at).getTime(), ty = new Date(y.c.created_at).getTime();
+      return sortDir === "asc" ? tx - ty : ty - tx;     // 收藏时间
+    });
+
     const f = (window.__mineFilter || "all");
     const filtered = f === "all" ? list : list.filter(x => x.c.status === f);
     const counts = { all: list.length }; STATUS_ORDER.forEach(k => counts[k] = list.filter(x => x.c.status === k).length);
     stats.innerHTML = STATUS_ORDER.map(k => `<div class="mine-stat"><b>${counts[k]}</b><span>${STATUS[k]}</span></div>`).join("");
     filter.innerHTML = `<button class="f-chip ${f === "all" ? "active" : ""}" data-f="all">全部</button>` + STATUS_ORDER.map(k => `<button class="f-chip ${f === k ? "active" : ""}" data-f="${k}">${STATUS[k]} ${counts[k]}</button>`).join("");
+
+    // 排序栏（收藏时间 / 番剧评分）
+    const sortEl = $("#mine-sort");
+    if (sortEl) {
+      const timeLabel = "收藏时间" + (sortMode === "time" ? (sortDir === "asc" ? " ↑" : " ↓") : "");
+      sortEl.innerHTML = `<span class="sort-label">排序</span>` +
+        `<button class="sort-chip ${sortMode === "time" ? "active" : ""}" data-sort="time">${timeLabel}</button>` +
+        `<button class="sort-chip ${sortMode === "rating" ? "active" : ""}" data-sort="rating">番剧评分</button>`;
+      sortEl.querySelectorAll(".sort-chip").forEach(b => b.onclick = () => {
+        const k = b.dataset.sort;
+        if (k === "time") {
+          if (window.__mineSort === "time") window.__mineSortDir = window.__mineSortDir === "asc" ? "desc" : "asc";
+          else { window.__mineSort = "time"; window.__mineSortDir = "desc"; }
+        } else {
+          window.__mineSort = "rating";
+        }
+        renderMine();
+      });
+    }
+
     if (!filtered.length) {
       if (empty) { empty.hidden = false; empty.querySelector("p").textContent = f === "all" ? "还没有收藏任何番剧。" : "该状态暂无番剧，去动画库添加吧。"; }
       grid.innerHTML = "";
