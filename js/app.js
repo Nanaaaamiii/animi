@@ -1152,6 +1152,11 @@
   async function renderNews() {
     await renderNewsBili(false);   // 默认静态 JSON（保证可用，无需联网即可看历史投稿）
     renderNewsFeed();
+    // 站长推荐视频（仅站长可编辑，数据存 Supabase owner_videos 表）
+    if (window.Community && window.Community.renderOwnerVideos) {
+      const ov = $("#owner-videos-grid");
+      if (ov) Community.renderOwnerVideos(ov);
+    }
   }
 
   /* ---------------- 初始化 ---------------- */

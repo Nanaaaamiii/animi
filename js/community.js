@@ -51,6 +51,12 @@
     const r = USER.profile.role, e = USER.profile.extra_role;
     return r === "站长" || r === "管理员" || e === "站长" || e === "管理员";
   };
+  // 仅站长（不含管理员）：用于「站长推荐视频」这类只授权站长本人的编辑入口
+  const isWebmaster = () => {
+    if (!USER || !USER.profile) return false;
+    const r = USER.profile.role, e = USER.profile.extra_role;
+    return r === "站长" || e === "站长";
+  };
   // 用户称号（如「站长」「管理员」），数据来自 profiles.role / extra_role（支持同时显示两个徽章）
   const ROLE_CLASS = { "站长": "role-owner", "管理员": "role-admin", "编辑": "role-editor" };
   const roleBadge = (r) => {
@@ -1652,6 +1658,65 @@
     closeComm();
   }
 
+  /* ---------------- 站长推荐视频（仅站长可编辑） ----------------
+     站长粘贴 B站视频链接（含 BV 号）即可嵌入播放器；数据存 Supabase owner_videos 表，
+     RLS 用 is_webmaster() 限制仅站长可增删，前端 isWebmaster() 同步隐藏编辑入口。 */
+  async function renderOwnerVideos(host) {
+    if (!host) return;
+    host.innerHTML = `<div class="loading">加载站长推荐视频…</div>`;
+    if (!sb) { host.innerHTML = `<div class="empty">社区模块未初始化。</div>`; return; }
+    const { data, error } = await sb.from("owner_videos").select("*").order("created_at", { ascending: false }).limit(30);
+    if (error) {
+      host.innerHTML = `<div class="cal-empty" style="grid-column:1/-1;padding:30px">推荐视频模块暂未启用（需先执行建表 SQL）。${isWebmaster() ? `<div style="margin-top:8px;font-size:11px;opacity:.7">错误：${esc(error.message)}</div>` : ""}</div>`;
+      return;
+    }
+    const list = data || [];
+    if (!list.length) {
+      host.innerHTML = `<div class="cal-empty" style="grid-column:1/-1;padding:40px">站长还没推荐视频～` +
+        (isWebmaster() ? `<div style="margin-top:12px"><button class="btn btn-primary" id="ov-add">＋ 添加推荐视频</button></div>` : ``) + `</div>`;
+      const ba = $("#ov-add", host); if (ba) ba.onclick = openOwnerVideoAdder;
+      return;
+    }
+    host.innerHTML = list.map(v => `<div class="ov-cell">
+        <div class="ov-player"><iframe src="https://player.bilibili.com/player.html?bvid=${esc(v.bvid)}&page=1&high_quality=1&danmaku=0&autoplay=0" scrolling="no" frameborder="no" allowfullscreen="true"></iframe></div>
+        <div class="ov-meta">
+          <div class="ov-title">${esc(v.title || ("B站视频 " + v.bvid))}</div>
+          ${isWebmaster() ? `<button class="op-remove" data-id="${v.id}" title="删除">✕</button>` : ""}
+        </div>
+      </div>`).join("") +
+      (isWebmaster() ? `<div style="grid-column:1/-1;text-align:center;margin-top:8px"><button class="btn btn-ghost" id="ov-add">＋ 添加 / 管理</button></div>` : "");
+    host.querySelectorAll(".op-remove").forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      await sb.from("owner_videos").delete().eq("id", +b.dataset.id);
+      toast("已删除推荐视频"); renderOwnerVideos(host);
+    });
+    const ba = $("#ov-add", host); if (ba) ba.onclick = openOwnerVideoAdder;
+  }
+  function openOwnerVideoAdder() {
+    if (!isWebmaster()) { toast("仅站长可操作"); return; }
+    const mask = $("#comm-mask"), modal = $("#comm-modal");
+    modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button>
+      <div class="comm-title">添加站长推荐视频</div>
+      <div class="cb-row"><span class="cb-label">B站链接</span>
+        <input id="ov-link" class="auth-input" placeholder="粘贴 B站视频链接，如 https://www.bilibili.com/video/BVxxxx" /></div>
+      <div class="cb-row"><span class="cb-label">标题(选填)</span>
+        <input id="ov-title" class="auth-input" placeholder="留空则显示 BV 号" /></div>
+      <div class="auth-err" id="ov-err"></div>
+      <div class="comm-actions"><button class="btn btn-primary" id="ov-save">添加</button></div>`;
+    $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
+    $("#ov-save").onclick = async () => {
+      const link = $("#ov-link").value.trim();
+      const m = link.match(/BV[0-9A-Za-z]+/i);
+      if (!m) { $("#ov-err").textContent = "无法从链接中识别 BV 号，请粘贴含 BVxxxx 的 B站视频链接"; return; }
+      const bvid = m[0].toUpperCase();
+      const { error } = await sb.from("owner_videos").insert({ bvid, title: $("#ov-title").value.trim() || null, added_by: USER.id });
+      if (error) { $("#ov-err").textContent = "添加失败：" + error.message; return; }
+      toast("已添加推荐视频");
+      const host = $("#owner-videos-grid"); if (host) renderOwnerVideos(host);
+      closeComm();
+    };
+  }
+
   /* ---------------- 私信 / 站内信 ---------------- */
   async function refreshMsgDot() {
     const icon = $("#msg-icon"), dot = $("#msg-dot");
@@ -2052,7 +2117,8 @@
     init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum, openReviewComposer,
     searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot,
     renderAnnouncement, renderEpisodeBox,
-    getUser: getCurrentUser
+    getUser: getCurrentUser,
+    renderOwnerVideos, openOwnerVideoAdder
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

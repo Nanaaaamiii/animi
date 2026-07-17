@@ -1015,6 +1015,15 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .bili-meta { padding: 10px 12px 12px; }
 .bili-title { font-size: 14px; font-weight: 700; line-height: 1.4; max-height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .bili-sub { margin-top: 6px; font-size: 12px; color: var(--text-faint); font-weight: 600; }
+
+/* 站长推荐视频 */
+.owner-videos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.ov-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.ov-player { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.ov-player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.ov-meta { position: relative; padding: 10px 12px 12px; }
+.ov-title { font-size: 14px; font-weight: 700; line-height: 1.4; padding-right: 26px; }
+
 .news-bili-empty, .news-feed-empty { color: var(--text-faint); font-size: 14px; padding: 18px 0; }
 
 /* 站内 B 站播放器弹窗 */
