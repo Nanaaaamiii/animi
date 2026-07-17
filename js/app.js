@@ -1086,13 +1086,17 @@
     $("#modal-mask").classList.add("open");
   }
   // UP 主视频：默认读静态 bili_feed.json（保证可用）；live=true 时先尝试 Worker 实时刷新，失败回退
+  // 夏日幻听MCE 投稿：每页 10 个 + 翻页（箭头）。数据来自静态 bili_feed.json（实时需 Worker，失败回退）。
+  let biliAll = null;          // 全量视频（缓存）
+  let biliPage = 0;            // 当前页（0 起）
+  const BILI_PAGE_SIZE = 10;
   async function renderNewsBili(live) {
     const grid = $("#news-bili"), empty = $("#news-bili-empty"), nameEl = $("#news-up-name");
     if (nameEl) nameEl.textContent = BILI_UP_NAME;
     let videos = null;
     if (live) {
       try {
-        const r = await fetch(BILI_PROXY + "/x/space/wbi/arc/search?mid=" + BILI_UP_MID + "&ps=12&pn=1&order=pubdate", { headers: { "Accept": "application/json" } });
+        const r = await fetch(BILI_PROXY + "/x/space/wbi/arc/search?mid=" + BILI_UP_MID + "&ps=" + BILI_PAGE_SIZE + "&pn=1&order=pubdate", { headers: { "Accept": "application/json" } });
         if (r.ok) {
           const j = await r.json();
           const list = j && j.data && j.data.list && j.data.list.vlist;
@@ -1105,15 +1109,27 @@
         }
       } catch (e) { /* 回退静态 JSON */ }
     }
-    if (!videos) {
+    if (videos) {
+      biliAll = videos; biliPage = 0;
+    } else {
       try {
         const r = await fetch("bili_feed.json", { cache: "no-store" });
-        if (r.ok) { const j = await r.json(); videos = j.videos || null; if (j.up_name && nameEl) nameEl.textContent = j.up_name; }
-      } catch (e) { videos = null; }
+        if (r.ok) { const j = await r.json(); biliAll = j.videos || null; if (j.up_name && nameEl) nameEl.textContent = j.up_name; }
+      } catch (e) { biliAll = biliAll || null; }
     }
-    if (!videos || !videos.length) { if (empty) empty.hidden = false; if (grid) grid.innerHTML = ""; return; }
+    paintBiliPage();
+  }
+  // 仅重绘当前页（翻页时不重新拉数据）
+  function paintBiliPage() {
+    const grid = $("#news-bili"), empty = $("#news-bili-empty");
+    const list = biliAll || [];
+    if (!list.length) { if (empty) empty.hidden = false; if (grid) grid.innerHTML = ""; renderBiliPager(0); return; }
     if (empty) empty.hidden = true;
-    grid.innerHTML = videos.map(v => `
+    const totalPages = Math.max(1, Math.ceil(list.length / BILI_PAGE_SIZE));
+    if (biliPage >= totalPages) biliPage = totalPages - 1;
+    if (biliPage < 0) biliPage = 0;
+    const items = list.slice(biliPage * BILI_PAGE_SIZE, biliPage * BILI_PAGE_SIZE + BILI_PAGE_SIZE);
+    grid.innerHTML = items.map(v => `
       <article class="bili-card" data-bvid="${esc(v.bvid)}">
         <div class="bili-cover">
           <img src="${esc(v.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
@@ -1126,6 +1142,18 @@
         </div>
       </article>`).join("");
     $$("#news-bili .bili-card").forEach(c => c.addEventListener("click", () => openBiliPlayer(c.dataset.bvid, c.querySelector(".bili-title").textContent)));
+    renderBiliPager(totalPages);
+  }
+  function renderBiliPager(totalPages) {
+    const pager = $("#news-bili-pager"); if (!pager) return;
+    if (!totalPages || totalPages <= 1) { pager.innerHTML = ""; return; }
+    pager.innerHTML = `
+      <button class="bili-pg-btn" id="bili-prev" ${biliPage <= 0 ? "disabled" : ""}>‹ 上一页</button>
+      <span class="bili-pg-info">第 ${biliPage + 1} / ${totalPages} 页</span>
+      <button class="bili-pg-btn" id="bili-next" ${biliPage >= totalPages - 1 ? "disabled" : ""}>下一页 ›</button>`;
+    const prev = $("#bili-prev"), next = $("#bili-next");
+    if (prev) prev.onclick = () => { if (biliPage > 0) { biliPage--; paintBiliPage(); } };
+    if (next) next.onclick = () => { if (biliPage < totalPages - 1) { biliPage++; paintBiliPage(); } };
   }
   // 动画制作动态：读 Supabase news 表（由 collect_news.py 从 RSS / Twitter(RSSHub) 同步）
   async function renderNewsFeed() {
