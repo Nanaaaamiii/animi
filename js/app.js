@@ -1064,6 +1064,13 @@
   }
   function timeAgo(ts) {
     if (!ts) return "";
+    // Supabase 的 published_at 是 ISO 字符串（如 "2026-07-17T07:17:36Z"），
+    // 而 B 站视频的 created 是数值型 Unix 时间戳。这里统一成数值再计算。
+    if (typeof ts === "string") {
+      const t = Date.parse(ts);
+      if (!isNaN(t)) ts = Math.floor(t / 1000);
+    }
+    if (typeof ts !== "number" || isNaN(ts)) return "";
     const s = Math.floor(Date.now() / 1000) - ts;
     if (s < 3600) return Math.max(1, Math.floor(s / 60)) + "分钟前";
     if (s < 86400) return Math.floor(s / 3600) + "小时前";
@@ -1085,39 +1092,36 @@
     const c = $("#bili-modal-close"); if (c) c.addEventListener("click", closeModal);
     $("#modal-mask").classList.add("open");
   }
-  // UP 主视频：默认读静态 bili_feed.json（保证可用）；live=true 时先尝试 Worker 实时刷新，失败回退
-  // 夏日幻听MCE 投稿：每页 10 个 + 翻页（箭头）。数据来自静态 bili_feed.json（实时需 Worker，失败回退）。
+  // UP 主视频：从静态 bili_feed.json 渲染（由 collect_bilibili.py 定时同步，
+  // 经 GitHub Pages 直接可读，无需浏览器直连 B 站 API 或 Worker 反代——后者因
+  // B 站对数据中心 IP 的风控(412 "request was banned")无法稳定拉取）。live=true
+  // 时加缓存破坏串重新拉取已部署的最新快照，并提示数据更新时间。
   let biliAll = null;          // 全量视频（缓存）
   let biliPage = 0;            // 当前页（0 起）
+  let lastBiliUpdate = 0;      // 快照更新时间（Unix 秒）
   const BILI_PAGE_SIZE = 10;
   async function renderNewsBili(live) {
     const grid = $("#news-bili"), empty = $("#news-bili-empty"), nameEl = $("#news-up-name");
     if (nameEl) nameEl.textContent = BILI_UP_NAME;
-    let videos = null;
-    if (live) {
-      try {
-        const r = await fetch(BILI_PROXY + "/x/space/wbi/arc/search?mid=" + BILI_UP_MID + "&ps=" + BILI_PAGE_SIZE + "&pn=1&order=pubdate", { headers: { "Accept": "application/json" } });
-        if (r.ok) {
-          const j = await r.json();
-          const list = j && j.data && j.data.list && j.data.list.vlist;
-          if (list && list.length) videos = list.map(v => ({
-            bvid: v.bvid, title: v.title,
-            cover: (v.pic || "").replace(/^http:/, "https:").replace(/^\/\//, "https://"),
-            play: v.play || 0, created: v.created || 0, length: v.length || "",
-            link: "https://www.bilibili.com/video/" + v.bvid
-          }));
+    const url = "bili_feed.json" + (live ? "?" + Date.now() : "");
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (r.ok) {
+        const j = await r.json();
+        biliAll = j.videos || null;
+        if (j.up_name && nameEl) nameEl.textContent = j.up_name;
+        lastBiliUpdate = j.updated_at || 0;
+        biliPage = 0;
+        paintBiliPage();
+        if (live && lastBiliUpdate) {
+          const d = new Date(lastBiliUpdate * 1000);
+          const hh = String(d.getHours()).padStart(2, "0"), mm = String(d.getMinutes()).padStart(2, "0");
+          toast(`已获取最新投稿（数据更新于 ${hh}:${mm}）`);
         }
-      } catch (e) { /* 回退静态 JSON */ }
-    }
-    if (videos) {
-      biliAll = videos; biliPage = 0;
-    } else {
-      try {
-        const r = await fetch("bili_feed.json", { cache: "no-store" });
-        if (r.ok) { const j = await r.json(); biliAll = j.videos || null; if (j.up_name && nameEl) nameEl.textContent = j.up_name; }
-      } catch (e) { biliAll = biliAll || null; }
-    }
-    paintBiliPage();
+        return;
+      }
+    } catch (e) { /* 忽略，保留上次缓存 */ }
+    if (live) toast("暂时无法连接，已显示最近一次缓存");
   }
   // 仅重绘当前页（翻页时不重新拉数据）
   function paintBiliPage() {
@@ -1155,8 +1159,8 @@
     if (prev) prev.onclick = () => { if (biliPage > 0) { biliPage--; paintBiliPage(); } };
     if (next) next.onclick = () => { if (biliPage < totalPages - 1) { biliPage++; paintBiliPage(); } };
   }
-  // 动画制作动态：读 Supabase news 表（由 collect_news.py 从 RSS / Twitter(RSSHub) 同步）
-  // 动画制作动态：一次性拉取后前端分页，每页 5 条（推文 / 资讯流）
+  // 帖文动态：读 Supabase news 表（由 collect_news.py 从 Anime News Network 同步并翻译）
+  // 帖文动态：一次性拉取后前端分页，每页 5 条（资讯流）
   let newsAll = [];
   let newsPage = 0;
   const NEWS_PAGE_SIZE = 5;
@@ -1226,13 +1230,13 @@
     document.body.style.overflow = "hidden";
   }
   async function renderNews() {
-    await renderNewsBili(false);   // 默认静态 JSON（保证可用，无需联网即可看历史投稿）
-    renderNewsFeed();
+    await renderNewsBili(false);   // 默认静态 JSON（定时同步，保证可用）
     // 站长推荐视频（仅站长可编辑，数据存 Supabase owner_videos 表）
     if (window.Community && window.Community.renderOwnerVideos) {
       const ov = $("#owner-videos-grid");
       if (ov) Community.renderOwnerVideos(ov);
     }
+    renderNewsFeed();             // 帖文动态放在站长推荐视频下面
   }
 
   /* ---------------- 初始化 ---------------- */
@@ -1261,10 +1265,10 @@
     bindScrollProgress();
     bindReveal();
     bindMagnetic();
-    // 动画资讯：点「刷新」尝试 Worker 实时拉取 UP 主最新投稿（失败自动回退静态）
+    // 动画资讯：点「刷新」重新拉取已部署的最新投稿快照（数据由后台定时同步）
     const nb = $("#news-refresh");
     if (nb) nb.addEventListener("click", () => { nb.disabled = true; nb.textContent = "刷新中…"; renderNewsBili(true).finally(() => { nb.disabled = false; nb.textContent = "↻ 刷新"; }); });
-    // 动画制作动态：点「刷新」即时重读 Supabase news 表（看后台爬虫最新同步的内容）
+    // 帖文动态：点「刷新」即时重读 Supabase news 表（看后台爬虫最新同步的内容）
     const nfr = $("#news-feed-refresh");
     if (nfr) nfr.addEventListener("click", () => { nfr.disabled = true; const old = nfr.textContent; nfr.textContent = "刷新中…"; renderNewsFeed(); setTimeout(() => { nfr.disabled = false; nfr.textContent = old; }, 800); });
     heroParticles();

@@ -278,7 +278,7 @@
         <div class="section-head">
           <div>
             <div class="section-title"><span class="bar"></span>动画资讯</div>
-            <div class="section-desc">UP 主最新视频 · 动画制作动态，一站式追更</div>
+            <div class="section-desc">UP 主最新视频 · 帖文动态，一站式追更</div>
           </div>
           <button class="btn btn-ghost" id="news-refresh" style="justify-content:center">↻ 刷新</button>
         </div>
@@ -286,22 +286,22 @@
         <!-- UP 主视频 -->
         <div class="news-block">
           <div class="news-bili-grid" id="news-bili"></div>
-          <div class="news-bili-empty" id="news-bili-empty" hidden>暂时没有抓到视频，点右上角「刷新」重试（B 站游客接口偶发风控）。</div>
+          <div class="news-bili-empty" id="news-bili-empty" hidden>暂时没有抓到视频，点右上角「刷新」重试。</div>
           <div class="bili-pager" id="news-bili-pager"></div>
-        </div>
-
-        <!-- 动画制作动态 / 资讯 -->
-        <div class="news-block">
-          <div class="news-block-title">📰 动画制作动态 <button class="news-refresh-btn" id="news-feed-refresh" title="刷新资讯">↻ 刷新</button></div>
-          <div class="news-feed" id="news-feed"></div>
-          <div class="news-feed-pager" id="news-feed-pager"></div>
-          <div class="news-feed-empty" id="news-feed-empty" hidden>暂无资讯。爬虫会每小时从 Anime News Network 同步最新动画行业新闻，并自动翻译成中文。</div>
         </div>
 
         <!-- 站长推荐视频（仅站长可编辑：粘贴 B站链接即可嵌入） -->
         <div class="news-block">
           <div class="news-block-title">⭐ 站长推荐视频</div>
           <div class="owner-videos-grid" id="owner-videos-grid"></div>
+        </div>
+
+        <!-- 帖文动态 / 资讯（置于站长推荐视频下方） -->
+        <div class="news-block">
+          <div class="news-block-title">📰 帖文动态 <button class="news-refresh-btn" id="news-feed-refresh" title="刷新资讯">↻ 刷新</button></div>
+          <div class="news-feed" id="news-feed"></div>
+          <div class="news-feed-pager" id="news-feed-pager"></div>
+          <div class="news-feed-empty" id="news-feed-empty" hidden>暂无资讯。爬虫会每小时从 Anime News Network 同步最新动画行业新闻，并自动翻译成中文。</div>
         </div>
       </div>
     </section>
