@@ -21,7 +21,16 @@
 
   // ---- 配置 ----
   const CHAT_PROXY = "https://kon.1770737253.workers.dev/chat";
-  const USER_AVATAR = "img/kon-logo.png";   // 用户头像（= 主页 K-ON 品牌 Logo）
+  const USER_AVATAR_FALLBACK = "img/kon-logo.png";  // 未登录时回退：主页 K-ON Logo
+
+  // 取当前登录用户在社区里上传的头像；未登录则用站点 Logo
+  function userAvatar() {
+    const cu = window.Community && window.Community.getUser && window.Community.getUser();
+    return {
+      avatar: (cu && cu.avatar) ? cu.avatar : USER_AVATAR_FALLBACK,
+      name: (cu && cu.name) ? cu.name : "你"
+    };
+  }
   const MAX_WORDS = 50;          // 回复最大词数
   const CHARACTERS = {
     ada: {
@@ -280,7 +289,8 @@
     div.className = "chat-msg " + role;
     let avatar;
     if (role === "user") {
-      avatar = avatarHTML({ avatar: USER_AVATAR, name: "你" });
+      const ua = userAvatar();
+      avatar = avatarHTML({ avatar: ua.avatar, name: ua.name });
     } else if (role === "system") {
       avatar = '<span class="msg-avatar">💡</span>';
     } else {

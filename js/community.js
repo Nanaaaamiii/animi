@@ -2039,10 +2039,20 @@
   }
 
   /* ---------------- 导出 ---------------- */
+  // 供聊天模块取当前登录用户的头像（社区里自己上传的那张），未登录返回 null
+  function getCurrentUser() {
+    if (!USER || !USER.profile) return null;
+    return {
+      avatar: USER.profile.avatar_url || "",       // Supabase Storage 公开 URL，无则用渐变首字母占位
+      name: USER.profile.username || "我"
+    };
+  }
+
   window.Community = {
     init, isAuthed, openIdentity, renderCollectBox, renderMine, onModalOpen, renderForum, openReviewComposer,
     searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot,
-    renderAnnouncement, renderEpisodeBox
+    renderAnnouncement, renderEpisodeBox,
+    getUser: getCurrentUser
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
