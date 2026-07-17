@@ -98,7 +98,7 @@
 
   async function init() {
     if (typeof supabase === "undefined") { console.warn("supabase-js 未加载"); return; }
-    try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+    try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); window.Community.sb = sb; }
     catch (e) { console.warn("Supabase 初始化失败", e); return; }
     bindCommunityUI();
     setupRealtime();

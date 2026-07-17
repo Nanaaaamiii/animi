@@ -22,6 +22,7 @@
         <a href="#" data-view="home" class="active">首页</a>
         <a href="#" data-view="calendar">放送时间表</a>
         <a href="#" data-view="browse">动画库</a>
+        <a href="#" data-view="news">动画资讯</a>
         <a href="#" data-view="game">动画小游戏</a>
         <a href="#" data-view="community">社区</a>
         <a href="#" data-view="mine">我的</a>
@@ -239,6 +240,33 @@
         <div id="comm-anime" class="review-list hidden"></div>
       </div>
     </section>
+
+    <!-- ============ 动画资讯 ============ -->
+    <section id="view-news" class="hidden">
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>动画资讯</div>
+            <div class="section-desc">UP 主最新视频 · 动画制作动态，一站式追更</div>
+          </div>
+          <button class="btn btn-ghost" id="news-refresh" style="justify-content:center">↻ 刷新</button>
+        </div>
+
+        <!-- UP 主视频 -->
+        <div class="news-block">
+          <div class="news-block-title">📺 <span id="news-up-name">UP 主</span> · 最新投稿</div>
+          <div class="news-bili-grid" id="news-bili"></div>
+          <div class="news-bili-empty" id="news-bili-empty" hidden>暂时没有抓到视频，点右上角「刷新」重试（B 站游客接口偶发风控）。</div>
+        </div>
+
+        <!-- 动画制作动态 / 资讯 -->
+        <div class="news-block">
+          <div class="news-block-title">📰 动画制作动态</div>
+          <div class="news-feed" id="news-feed"></div>
+          <div class="news-feed-empty" id="news-feed-empty" hidden>暂无资讯。需配置 RSS 源（如 Twitter 经 RSSHub）并由爬虫同步到数据库。</div>
+        </div>
+      </div>
+    </section>
   </main>
 
 
@@ -265,6 +293,7 @@
           <a href="#" data-view="home">首页</a>
           <a href="#" data-view="calendar">放送时间表</a>
           <a href="#" data-view="browse">动画库</a>
+          <a href="#" data-view="news">动画资讯</a>
           <a href="#" data-view="game">动画小游戏</a>
           <a href="#" data-view="community">社区</a>
         </div>

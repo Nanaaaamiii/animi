@@ -9,6 +9,11 @@
   const WEEK_EN = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
   // 免 VPN：Bangumi 公开 API 经 Cloudflare Worker 反代（配置见 deploy/cloudflare_worker.js）
   const BGM_PROXY = "https://kon.1770737253.workers.dev/bgm";
+  // 动画资讯：B 站 UP 主（夏日幻听MCE / MCE汉化组）实时投稿 + 站内嵌入播放
+  const BILI_UP_MID = 224267770;                 // 当前活跃账号 UID（旧号 7753700 已封禁）
+  const BILI_UP_NAME = "夏日幻听MCE";
+  const BILI_PROXY = "https://kon.1770737253.workers.dev/bili"; // Worker 反代 api.bilibili.com（实时刷新；失败回退静态 bili_feed.json）
+  const NEWS_TABLE = "news";                     // Supabase 资讯表（RSS / Twitter 经 RSSHub 同步）
 
   // 封面渐变色板（按 id 取色，保证稳定 & 美观）
   const PALETTES = [
@@ -68,7 +73,7 @@
   }
 
   /* ---------------- 视图切换 (SPA) ---------------- */
-  const views = ["home", "calendar", "browse", "game", "community", "mine"];
+  const views = ["home", "calendar", "browse", "news", "game", "community", "mine"];
   function showView(name) {
     if (!views.includes(name)) name = "home";
     views.forEach(v => $("#view-" + v).classList.toggle("hidden", v !== name));
@@ -84,6 +89,7 @@
     if (name === "mine") renderMine();
     if (name === "community" && window.Community) Community.renderForum();
     if (name === "game") renderGameRoot();
+    if (name === "news") renderNews();
     setTimeout(refreshVisibleRatings, 350); // 视图切换后刷新可见卡片的实时评分
   }
 
@@ -1049,6 +1055,105 @@
     });
   }
 
+  /* ---------------- 动画资讯 ---------------- */
+  function fmtCount(n) {
+    n = +n || 0;
+    if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, "") + "万";
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "千";
+    return String(n);
+  }
+  function timeAgo(ts) {
+    if (!ts) return "";
+    const s = Math.floor(Date.now() / 1000) - ts;
+    if (s < 3600) return Math.max(1, Math.floor(s / 60)) + "分钟前";
+    if (s < 86400) return Math.floor(s / 3600) + "小时前";
+    const d = Math.floor(s / 86400);
+    if (d === 1) return "昨天";
+    if (d < 30) return d + "天前";
+    if (d < 365) return Math.floor(d / 30) + "个月前";
+    return Math.floor(d / 365) + "年前";
+  }
+  // 在站内用 B 站官方嵌入播放器观看（player.bilibili.com 允许跨站嵌入，无需 API）
+  function openBiliPlayer(bvid, title) {
+    const el = $("#modal");
+    el.dataset.id = "";
+    el.innerHTML = `<div class="modal-bili">
+      <div class="modal-bili-head"><b>${esc(title)}</b><button class="modal-close" id="bili-modal-close" aria-label="关闭">✕</button></div>
+      <div class="modal-bili-frame"><iframe src="https://player.bilibili.com/player.html?bvid=${esc(bvid)}&page=1&high_quality=1&danmaku=0&autoplay=0" allowfullscreen scrolling="no" frameborder="0"></iframe></div>
+      <div class="modal-bili-foot"><a href="https://www.bilibili.com/video/${esc(bvid)}" target="_blank" rel="noopener">在 B 站打开 ↗</a></div>
+    </div>`;
+    const c = $("#bili-modal-close"); if (c) c.addEventListener("click", closeModal);
+    $("#modal-mask").classList.add("open");
+  }
+  // UP 主视频：默认读静态 bili_feed.json（保证可用）；live=true 时先尝试 Worker 实时刷新，失败回退
+  async function renderNewsBili(live) {
+    const grid = $("#news-bili"), empty = $("#news-bili-empty"), nameEl = $("#news-up-name");
+    if (nameEl) nameEl.textContent = BILI_UP_NAME;
+    let videos = null;
+    if (live) {
+      try {
+        const r = await fetch(BILI_PROXY + "/x/space/wbi/arc/search?mid=" + BILI_UP_MID + "&ps=12&pn=1&order=pubdate", { headers: { "Accept": "application/json" } });
+        if (r.ok) {
+          const j = await r.json();
+          const list = j && j.data && j.data.list && j.data.list.vlist;
+          if (list && list.length) videos = list.map(v => ({
+            bvid: v.bvid, title: v.title,
+            cover: (v.pic || "").replace(/^http:/, "https:").replace(/^\/\//, "https://"),
+            play: v.play || 0, created: v.created || 0, length: v.length || "",
+            link: "https://www.bilibili.com/video/" + v.bvid
+          }));
+        }
+      } catch (e) { /* 回退静态 JSON */ }
+    }
+    if (!videos) {
+      try {
+        const r = await fetch("bili_feed.json", { cache: "no-store" });
+        if (r.ok) { const j = await r.json(); videos = j.videos || null; if (j.up_name && nameEl) nameEl.textContent = j.up_name; }
+      } catch (e) { videos = null; }
+    }
+    if (!videos || !videos.length) { if (empty) empty.hidden = false; if (grid) grid.innerHTML = ""; return; }
+    if (empty) empty.hidden = true;
+    grid.innerHTML = videos.map(v => `
+      <article class="bili-card" data-bvid="${esc(v.bvid)}">
+        <div class="bili-cover">
+          <img src="${esc(v.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">
+          <span class="bili-play">▶ 播放</span>
+          <span class="bili-len">${esc(v.length)}</span>
+        </div>
+        <div class="bili-meta">
+          <div class="bili-title">${esc(v.title)}</div>
+          <div class="bili-sub">${fmtCount(v.play)} 播放 · ${timeAgo(v.created)}</div>
+        </div>
+      </article>`).join("");
+    $$("#news-bili .bili-card").forEach(c => c.addEventListener("click", () => openBiliPlayer(c.dataset.bvid, c.querySelector(".bili-title").textContent)));
+  }
+  // 动画制作动态：读 Supabase news 表（由 collect_news.py 从 RSS / Twitter(RSSHub) 同步）
+  async function renderNewsFeed() {
+    const box = $("#news-feed"), empty = $("#news-feed-empty");
+    if (!box) return;
+    const sb = window.Community && window.Community.sb;
+    if (!sb) { if (empty) empty.hidden = false; return; }
+    try {
+      const { data, error } = await sb.from(NEWS_TABLE).select("*").order("published_at", { ascending: false }).limit(40);
+      if (error || !data || !data.length) { if (empty) empty.hidden = false; return; }
+      if (empty) empty.hidden = true;
+      box.innerHTML = data.map(n => `
+        <a class="news-item" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
+          ${n.image ? `<img class="news-thumb" src="${esc(n.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ""}
+          <div class="news-body">
+            <div class="news-source">${esc(n.source || "资讯")}${n.author ? " · " + esc(n.author) : ""}</div>
+            <div class="news-title">${esc(n.title)}</div>
+            ${n.summary ? `<div class="news-summary">${esc(n.summary)}</div>` : ""}
+            <div class="news-time">${timeAgo(n.published_at)}</div>
+          </div>
+        </a>`).join("");
+    } catch (e) { if (empty) empty.hidden = false; }
+  }
+  async function renderNews() {
+    await renderNewsBili(false);   // 默认静态 JSON（保证可用，无需联网即可看历史投稿）
+    renderNewsFeed();
+  }
+
   /* ---------------- 初始化 ---------------- */
   function init() {
     bindTheme();
@@ -1075,6 +1180,9 @@
     bindScrollProgress();
     bindReveal();
     bindMagnetic();
+    // 动画资讯：点「刷新」尝试 Worker 实时拉取 UP 主最新投稿（失败自动回退静态）
+    const nb = $("#news-refresh");
+    if (nb) nb.addEventListener("click", () => { nb.disabled = true; nb.textContent = "刷新中…"; renderNewsBili(true).finally(() => { nb.disabled = false; nb.textContent = "↻ 刷新"; }); });
     heroParticles();
     heroTypewriter();
     heroStats();

@@ -999,3 +999,46 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
   .hero-actions .btn { flex: 1 1 auto; justify-content: center; }
   .search-box { display: none; }   /* 极窄屏隐藏搜索框，保证 K-ON 与导航按钮不溢出 */
 }
+
+/* ============ 动画资讯 ============ */
+.news-block { margin-top: 30px; }
+.news-block:first-of-type { margin-top: 8px; }
+.news-block-title { font-size: 16px; font-weight: 800; margin-bottom: 14px; color: var(--text); }
+.news-bili-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.bili-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s; }
+.bili-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+.bili-cover { position: relative; aspect-ratio: 16 / 9; background: #000; overflow: hidden; }
+.bili-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bili-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.28); color: #fff; font-size: 15px; font-weight: 700; opacity: 0; transition: opacity .2s; }
+.bili-card:hover .bili-play { opacity: 1; }
+.bili-len { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.72); color: #fff; font-size: 12px; padding: 1px 6px; border-radius: 4px; }
+.bili-meta { padding: 10px 12px 12px; }
+.bili-title { font-size: 14px; font-weight: 700; line-height: 1.4; max-height: 2.8em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.bili-sub { margin-top: 6px; font-size: 12px; color: var(--text-faint); font-weight: 600; }
+.news-bili-empty, .news-feed-empty { color: var(--text-faint); font-size: 14px; padding: 18px 0; }
+
+/* 站内 B 站播放器弹窗 */
+.modal-bili { background: var(--surface); border-radius: 16px; overflow: hidden; max-width: 880px; width: 100%; }
+.modal-bili-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.modal-bili-head b { flex: 1; min-width: 0; font-size: 15px; }
+.modal-close { margin-left: auto; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+.modal-close:hover { border-color: var(--primary); color: var(--primary); }
+.modal-bili-frame { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.modal-bili-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.modal-bili-foot { padding: 12px 16px; text-align: right; }
+.modal-bili-foot a { color: var(--primary); font-size: 13px; font-weight: 700; text-decoration: none; }
+
+/* 动画制作动态列表 */
+.news-feed { display: flex; flex-direction: column; gap: 10px; }
+.news-item { display: flex; gap: 14px; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; text-decoration: none; color: inherit; transition: border-color .2s, transform .2s; }
+.news-item:hover { border-color: var(--primary); transform: translateY(-2px); }
+.news-thumb { width: 120px; height: 78px; object-fit: cover; border-radius: 8px; flex: 0 0 auto; background: var(--surface-2); }
+.news-body { flex: 1; min-width: 0; }
+.news-source { font-size: 12px; color: var(--primary); font-weight: 700; margin-bottom: 4px; }
+.news-title { font-size: 15px; font-weight: 700; line-height: 1.4; }
+.news-summary { margin-top: 5px; font-size: 13px; color: var(--text-soft); line-height: 1.5; max-height: 3em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.news-time { margin-top: 6px; font-size: 12px; color: var(--text-faint); }
+@media (max-width: 560px) {
+  .news-bili-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .news-thumb { width: 92px; height: 60px; }
+}
