@@ -1659,8 +1659,41 @@
   }
 
   /* ---------------- 站长推荐视频（仅站长可编辑） ----------------
-     站长粘贴 B站视频链接（含 BV 号）即可嵌入播放器；数据存 Supabase owner_videos 表，
-     RLS 用 is_webmaster() 限制仅站长可增删，前端 isWebmaster() 同步隐藏编辑入口。 */
+     站长填入 BV 号即可：自动拉取标题/作者/发布时间，显示为卡片，点击跳 B站播放
+     （不再用内联 iframe，避免 B站禁止嵌入导致无法播放）。数据存 Supabase owner_videos 表。 */
+  const BILI_VIEW = "https://kon.1770737253.workers.dev/bili/x/web-interface/view";
+  // 经 Worker 代理拉单条视频元数据（标题/作者/发布时间/封面）。Worker 未部署时静默失败，回退手动填。
+  async function fetchBiliMeta(bvid) {
+    try {
+      const r = await fetch(BILI_VIEW + "?bvid=" + bvid, { headers: { "Accept": "application/json" } });
+      if (!r.ok) return null;
+      const j = await r.json();
+      if (j && j.code === 0 && j.data) {
+        return {
+          title: j.data.title || "",
+          author: (j.data.owner && j.data.owner.name) || "",
+          pubdate: j.data.pubdate ? new Date(j.data.pubdate * 1000).toISOString() : null,
+          cover: (j.data.pic || "").replace(/^http:/, "https:").replace(/^\/\//, "https://")
+        };
+      }
+    } catch (e) { /* Worker 未部署时失败，忽略 */ }
+    return null;
+  }
+  function ovCardHTML(v) {
+    const url = "https://www.bilibili.com/video/" + esc(v.bvid);
+    const sub = [v.author, v.pubdate ? timeAgo(v.pubdate) : null].filter(Boolean).join(" · ");
+    return `<a class="ov-cell" href="${url}" target="_blank" rel="noopener">
+        <div class="ov-cover">
+          ${v.cover ? `<img src="${esc(v.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : `<div class="ov-noimg">📺</div>`}
+          <span class="bili-play">▶ 在B站播放</span>
+        </div>
+        <div class="ov-meta">
+          <div class="ov-title">${esc(v.title || ("B站视频 " + v.bvid))}</div>
+          <div class="ov-sub">${esc(sub || "点击查看")}</div>
+        </div>
+        ${isWebmaster() ? `<button class="op-remove" data-id="${v.id}" title="删除">✕</button>` : ""}
+      </a>`;
+  }
   async function renderOwnerVideos(host) {
     if (!host) return;
     host.innerHTML = `<div class="loading">加载站长推荐视频…</div>`;
@@ -1677,16 +1710,10 @@
       const ba = $("#ov-add", host); if (ba) ba.onclick = openOwnerVideoAdder;
       return;
     }
-    host.innerHTML = list.map(v => `<div class="ov-cell">
-        <div class="ov-player"><iframe src="https://player.bilibili.com/player.html?bvid=${esc(v.bvid)}&page=1&high_quality=1&danmaku=0&autoplay=0" scrolling="no" frameborder="no" allowfullscreen="true"></iframe></div>
-        <div class="ov-meta">
-          <div class="ov-title">${esc(v.title || ("B站视频 " + v.bvid))}</div>
-          ${isWebmaster() ? `<button class="op-remove" data-id="${v.id}" title="删除">✕</button>` : ""}
-        </div>
-      </div>`).join("") +
+    host.innerHTML = list.map(ovCardHTML).join("") +
       (isWebmaster() ? `<div style="grid-column:1/-1;text-align:center;margin-top:8px"><button class="btn btn-ghost" id="ov-add">＋ 添加 / 管理</button></div>` : "");
     host.querySelectorAll(".op-remove").forEach(b => b.onclick = async (e) => {
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       await sb.from("owner_videos").delete().eq("id", +b.dataset.id);
       toast("已删除推荐视频"); renderOwnerVideos(host);
     });
@@ -1697,20 +1724,47 @@
     const mask = $("#comm-mask"), modal = $("#comm-modal");
     modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button>
       <div class="comm-title">添加站长推荐视频</div>
-      <div class="cb-row"><span class="cb-label">B站链接</span>
-        <input id="ov-link" class="auth-input" placeholder="粘贴 B站视频链接，如 https://www.bilibili.com/video/BVxxxx" /></div>
-      <div class="cb-row"><span class="cb-label">标题(选填)</span>
-        <input id="ov-title" class="auth-input" placeholder="留空则显示 BV 号" /></div>
+      <div class="cb-row"><span class="cb-label">BV 号</span>
+        <input id="ov-bvid" class="auth-input" placeholder="填 BV 号，如 BV1xxxx（也可直接粘贴视频链接）" /></div>
+      <div class="auth-hint" id="ov-hint" style="font-size:12px;color:var(--text-faint);margin:-4px 0 6px">输入 BV 号后会自动拉取标题/作者/发布时间（需 Worker 代理；拉不到也可手填）。</div>
+      <div class="cb-row"><span class="cb-label">标题</span>
+        <input id="ov-title" class="auth-input" placeholder="自动填充，可改" /></div>
+      <div class="cb-row"><span class="cb-label">作者</span>
+        <input id="ov-author" class="auth-input" placeholder="自动填充，可改" /></div>
+      <div class="cb-row"><span class="cb-label">发布时间</span>
+        <input id="ov-date" class="auth-input" placeholder="自动填充，可改" /></div>
       <div class="auth-err" id="ov-err"></div>
       <div class="comm-actions"><button class="btn btn-primary" id="ov-save">添加</button></div>`;
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
+    const bvInput = $("#ov-bvid"), titleI = $("#ov-title"), authorI = $("#ov-author"), dateI = $("#ov-date"), hint = $("#ov-hint"), err = $("#ov-err");
+    let lastFetched = "";
+    bvInput.addEventListener("input", async () => {
+      const m = bvInput.value.trim().match(/BV[0-9A-Za-z]+/i);
+      const bvid = m ? m[0].toUpperCase() : "";
+      if (!bvid || bvid === lastFetched) return;
+      lastFetched = bvid;
+      hint.textContent = "正在拉取视频信息…";
+      const meta = await fetchBiliMeta(bvid);
+      if (meta) {
+        if (!titleI.value) titleI.value = meta.title || "";
+        if (!authorI.value) authorI.value = meta.author || "";
+        if (!dateI.value && meta.pubdate) dateI.value = new Date(meta.pubdate).toLocaleDateString("zh-CN");
+        hint.textContent = "已自动填充标题/作者/发布时间，可修改后添加。";
+      } else {
+        hint.textContent = "未能自动拉取（Worker 未部署？），请手动填写后添加。";
+      }
+    });
     $("#ov-save").onclick = async () => {
-      const link = $("#ov-link").value.trim();
-      const m = link.match(/BV[0-9A-Za-z]+/i);
-      if (!m) { $("#ov-err").textContent = "无法从链接中识别 BV 号，请粘贴含 BVxxxx 的 B站视频链接"; return; }
+      const m = bvInput.value.trim().match(/BV[0-9A-Za-z]+/i);
+      if (!m) { err.textContent = "请填写 BV 号（或粘贴含 BVxxxx 的视频链接）"; return; }
       const bvid = m[0].toUpperCase();
-      const { error } = await sb.from("owner_videos").insert({ bvid, title: $("#ov-title").value.trim() || null, added_by: USER.id });
-      if (error) { $("#ov-err").textContent = "添加失败：" + error.message; return; }
+      const row = { bvid, title: titleI.value.trim() || null, author: authorI.value.trim() || null, added_by: USER.id };
+      if (dateI.value.trim()) {
+        const t = Date.parse(dateI.value.trim());
+        if (!isNaN(t)) row.pubdate = new Date(t).toISOString();
+      }
+      const { error } = await sb.from("owner_videos").insert(row);
+      if (error) { err.textContent = "添加失败：" + error.message; return; }
       toast("已添加推荐视频");
       const host = $("#owner-videos-grid"); if (host) renderOwnerVideos(host);
       closeComm();
