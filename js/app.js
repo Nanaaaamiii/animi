@@ -84,6 +84,7 @@
     if (name === "mine") renderMine();
     if (name === "community" && window.Community) Community.renderForum();
     if (name === "game") renderGameRoot();
+    setTimeout(refreshVisibleRatings, 350); // 视图切换后刷新可见卡片的实时评分
   }
 
   /* ---------------- 首页 ---------------- */
@@ -132,6 +133,7 @@
     renderCoverMarquee();
     // 首页右侧公告栏
     if (window.Community) Community.renderAnnouncement($("#announce-panel"));
+    refreshVisibleRatings(); // 首页卡片渲染后同步实时评分
   }
 
   // 首页「热门番剧」封面滚动播放：从「本周放送表」(当前季度 + 有放送日 + 日本动画) 随机抽若干部，
@@ -457,6 +459,7 @@
         ${items}
       </div>`;
     }).join("");
+    refreshVisibleRatings(); // 放送表卡片渲染后同步实时评分
   }
   // 每日「展开/收起全部」：供日历卡片下方的「＋N 部，点击展开全部」内联调用
   window.__toggleCalDay = function (wd) {
@@ -544,6 +547,7 @@
     const mw = $("#browse-more-wrap"), mb = $("#browse-more");
     if (mw) mw.style.display = _bShown < _bList.length ? "" : "none";
     if (mb) mb.textContent = `加载更多（${_bShown} / ${_bList.length}）`;
+    refreshVisibleRatings(); // 动画库每批卡片渲染后同步实时评分
   }
 
   /* ---------------- 用户搜索下拉（昵称 / UID） ---------------- */
@@ -661,6 +665,61 @@
         .catch(() => {});
     } catch (e) { /* 离线或被拦截：保持烘焙值 */ }
   }
+
+  // ---- 浏览卡片实时评分刷新（localStorage 缓存 + 限流，避免狂刷 Bangumi 接口）----
+  // 详情弹窗已由 refreshLiveRating 每次打开实时拉取；此处补充：动画库 / 首页 / 放送表 等
+  // 列表卡片在渲染后，把可见番剧的评分同步为 Bangumi 当前值（缓存 6h，限流 ~5 请求/秒）。
+  const LIVE_KEY = "anime_live_v1";
+  const LIVE_TTL = 6 * 3600 * 1000;
+  let _liveCache = (() => { try { return JSON.parse(localStorage.getItem(LIVE_KEY)) || {}; } catch (e) { return {}; } })();
+  let _liveQueue = [], _liveRunning = false;
+  function _saveLive() { try { localStorage.setItem(LIVE_KEY, JSON.stringify(_liveCache)); } catch (e) {} }
+  function applyLiveRate(id, score) {
+    if (score == null || isNaN(score)) return;
+    $$(`[data-id="${id}"]`).forEach(el => {
+      if (!el.matches(".anime-card, .cal-item, .cover-cell")) return;
+      const r = el.querySelector(".rate, .r, .cover-rating");
+      if (r) { r.innerHTML = star + rateTxt(score); r.title = "Bangumi 实时评分"; r.classList.add("live"); }
+    });
+  }
+  function refreshLiveRatings(ids) {
+    const now = Date.now();
+    const fresh = [], stale = [];
+    ids.forEach(id => {
+      const c = _liveCache[id];
+      if (c && (now - c[1]) < LIVE_TTL) fresh.push([id, c[0]]);
+      else stale.push(id);
+    });
+    fresh.forEach(([id, s]) => applyLiveRate(id, s));                         // 缓存命中：立即更新
+    stale.slice(0, 80 - _liveQueue.length).forEach(id => _liveQueue.push(id)); // 待拉取队列上限 80
+    if (!_liveRunning) drainLiveQueue();
+  }
+  function drainLiveQueue() {
+    if (!_liveQueue.length) { _liveRunning = false; _saveLive(); return; }
+    _liveRunning = true;
+    const id = _liveQueue.shift();
+    fetch(BGM_PROXY + "/subject/" + id + "?responseGroup=large", { headers: { "Accept": "application/json" } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && d.rating && d.rating.score != null) {
+          _liveCache[id] = [d.rating.score, Date.now()];
+          applyLiveRate(id, d.rating.score);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setTimeout(drainLiveQueue, 200)); // ~5 请求/秒，避免触发 Bangumi 限流
+  }
+  function refreshVisibleRatings() {
+    const ids = new Set();
+    $$(".anime-card[data-id], .cal-item[data-id], .cover-cell[data-id]").forEach(el => {
+      if (!el.querySelector(".rate, .r, .cover-rating")) return; // 仅当卡片确实展示评分
+      const id = parseInt(el.dataset.id, 10);
+      if (!isNaN(id)) ids.add(id);
+    });
+    if (ids.size) refreshLiveRatings([...ids]);
+  }
+  window.refreshVisibleRatings = refreshVisibleRatings; // 供异步渲染（社区/加载更多）后调用
+
   window.openModal = openModal;   // 顶层挂载，供社区/其它模块随时调用
   window.renderGameRoot = renderGameRoot;   // 顶层挂载，供游戏内「返回」按钮内联调用
   function closeModal() {
