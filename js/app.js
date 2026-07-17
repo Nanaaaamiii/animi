@@ -144,11 +144,12 @@
     // 与放送时间表「每周放送」同口径：当前真实季度 + broadcastWeekday>0 + 日本动画 + 有封面
     let pool = DATA.filter(a =>
       a.year === nowSeason.year && a.season === nowSeason.season &&
-      broadcastWeekday(a) > 0 && isJapanese(a) && a.cover
+      broadcastWeekday(a) > 0 && isJapanese(a) && a.cover &&
+      ratingReliable(a) && a.rating > 0   // 排除「暂无评分」的作品
     );
     if (!pool.length) {
       // 数据未覆盖本季时回退：评分可靠 + 有封面的热门番剧
-      pool = DATA.filter(a => ratingReliable(a) && a.cover)
+      pool = DATA.filter(a => ratingReliable(a) && a.rating > 0 && a.cover)
         .sort((x, y) => (y.rating || 0) - (x.rating || 0)).slice(0, 60);
     }
     if (!pool.length) { const m = $("#cover-marquee"); if (m) m.style.display = "none"; return; }
