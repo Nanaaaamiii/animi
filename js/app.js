@@ -1169,9 +1169,9 @@
         <a class="news-item" href="${esc(n.url || "#")}" target="_blank" rel="noopener">
           ${n.image ? `<img class="news-thumb" src="${esc(n.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : ""}
           <div class="news-body">
-            <div class="news-source">${esc(n.source || "资讯")}${n.author ? " · " + esc(n.author) : ""}</div>
-            <div class="news-title">${esc(n.title)}</div>
-            ${n.summary ? `<div class="news-summary">${esc(n.summary)}</div>` : ""}
+          <div class="news-source">${esc(n.source || "资讯")}${n.author ? " · " + esc(n.author) : ""}</div>
+          <div class="news-title">${esc(n.title_cn || n.title)}</div>
+          ${n.summary_cn || n.summary ? `<div class="news-summary">${esc(n.summary_cn || n.summary)}</div>` : ""}
             <div class="news-time">${timeAgo(n.published_at)}</div>
           </div>
         </a>`).join("");
@@ -1216,6 +1216,9 @@
     // 动画资讯：点「刷新」尝试 Worker 实时拉取 UP 主最新投稿（失败自动回退静态）
     const nb = $("#news-refresh");
     if (nb) nb.addEventListener("click", () => { nb.disabled = true; nb.textContent = "刷新中…"; renderNewsBili(true).finally(() => { nb.disabled = false; nb.textContent = "↻ 刷新"; }); });
+    // 动画制作动态：点「刷新」即时重读 Supabase news 表（看后台爬虫最新同步的内容）
+    const nfr = $("#news-feed-refresh");
+    if (nfr) nfr.addEventListener("click", () => { nfr.disabled = true; const old = nfr.textContent; nfr.textContent = "刷新中…"; renderNewsFeed(); setTimeout(() => { nfr.disabled = false; nfr.textContent = old; }, 800); });
     heroParticles();
     heroTypewriter();
     heroStats();

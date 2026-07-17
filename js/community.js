@@ -726,7 +726,7 @@
       const b = $("#forum-login", wrap); if (b) b.onclick = openIdentity; return;
     }
     wrap.innerHTML = `<div class="loading">加载中…</div>`;
-    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id,views,images,like_count,is_pinned").order("created_at", { ascending: false }).limit(50);
+    const { data, error } = await sb.from("forum_posts").select("id,title,body,created_at,user_id,views,images,like_count,is_pinned,videos").order("created_at", { ascending: false }).limit(50);
     if (error) { wrap.innerHTML = `<div class="err">加载失败：${esc(error.message)}</div>`; return; }
     if (!data || !data.length) { wrap.innerHTML = `<div class="empty">还没有帖子，点右上角「＋ 发帖」抢沙发吧～</div>`; return; }
     const ids = [...new Set(data.map(p => p.user_id))];
@@ -791,7 +791,7 @@
     const mask = $("#comm-mask"), modal = $("#comm-modal");
     modal.innerHTML = `<button class="modal-close" id="comm-close">✕</button><div class="loading">加载中…</div>`;
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
-    const { data: post } = await sb.from("forum_posts").select("title,body,created_at,user_id,views,images,like_count,is_pinned").eq("id", id).single();
+    const { data: post } = await sb.from("forum_posts").select("title,body,created_at,user_id,views,images,like_count,is_pinned,videos").eq("id", id).single();
     if (!post) { modal.innerHTML = `<div class="err">帖子不存在</div>`; return; }
     const { data: vres } = await sb.rpc("inc_post_view", { p_id: id });
     const views = (vres && vres[0] && vres[0].inc_post_view) || post.views || 0;

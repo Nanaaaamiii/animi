@@ -1003,7 +1003,10 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 /* ============ 动画资讯 ============ */
 .news-block { margin-top: 30px; }
 .news-block:first-of-type { margin-top: 8px; }
-.news-block-title { font-size: 16px; font-weight: 800; margin-bottom: 14px; color: var(--text); }
+.news-block-title { font-size: 16px; font-weight: 800; margin-bottom: 14px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.news-refresh-btn { font-size: 12px; font-weight: 700; color: var(--primary); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px 10px; cursor: pointer; }
+.news-refresh-btn:hover { border-color: var(--primary); }
+.news-refresh-btn:disabled { opacity: .6; cursor: default; }
 .news-bili-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
 .bili-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; cursor: pointer; transition: border-color .2s, transform .2s, box-shadow .2s; }
 .bili-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: var(--shadow-hover); }
