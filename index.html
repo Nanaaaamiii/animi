@@ -60,10 +60,41 @@
         </div>
       </div>
 
-      <!-- 首页公告栏：站长/管理员可编辑（图片+文字）、可拖动/缩放，普通用户只读 -->
-      <div id="announce-panel" class="announce-panel">
-        <!-- 由 community.js renderAnnouncement() 填充 -->
-        <div class="announce-loading">加载中…</div>
+      <!-- 首页公告栏 + AI 角色互动（安达 & 岛村） -->
+      <div class="announce-row wrap">
+        <!-- AI 角色：安达与岛村（可点击切换对话对象，CSS 动画） -->
+        <div class="char-panel" id="char-panel">
+          <div class="char-sprite char-ada active" data-char="ada" title="安达">
+            <img src="img/ada-front.png" alt="安达" loading="eager" />
+          </div>
+          <div class="char-sprite char-shima" data-char="shima" title="岛村">
+            <img src="img/shima-front.png" alt="岛村" loading="eager" />
+          </div>
+        </div>
+        <!-- 公告栏（站长可编辑）+ 聊天对话框 -->
+        <div class="announce-area">
+          <div id="announce-panel" class="announce-panel">
+            <!-- 由 community.js renderAnnouncement() 填充 -->
+            <div class="announce-loading">加载中…</div>
+          </div>
+          <!-- 聊天对话框 -->
+          <div class="chat-box" id="chat-box">
+            <div class="chat-header">
+              <span class="chat-title">💬 和她们聊聊</span>
+              <span class="chat-hint" id="chat-hint">点击角色切换对话人 · 可问番剧/网站/任何问题</span>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-msg system">
+                <span class="msg-avatar">👋</span>
+                <span class="msg-bubble">嗨！我们是安达和岛村～点左边的人物就能和对应的人聊天哦。有什么想问的尽管说！</span>
+              </div>
+            </div>
+            <div class="chat-input-row">
+              <input class="chat-input" id="chat-input" type="text" placeholder="输入消息…" maxlength="200" />
+              <button class="chat-send" id="chat-send">发送</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 热门番剧 封面滚动播放 -->
@@ -318,5 +349,6 @@
   <script src="js/data.js"></script>
   <script src="js/community.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/chat.js"></script>
 </body>
 </html>

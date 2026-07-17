@@ -1042,3 +1042,93 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
   .news-bili-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .news-thumb { width: 92px; height: 60px; }
 }
+
+/* ============ AI 角色：安达 & 岛村（公告栏左侧） ============ */
+.announce-row { display: flex; gap: 16px; align-items: flex-start; margin-top: 20px; }
+.char-panel { display: flex; gap: 4px; flex-shrink: 0; padding: 8px 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  box-shadow: var(--shadow-hover); position: relative; z-index: 2; }
+.char-sprite { width: 72px; height: 100px; position: relative; cursor: pointer;
+  transition: transform .25s ease, filter .25s; border-radius: 12px; overflow: hidden;
+  opacity: .55; filter: grayscale(.3); }
+.char-sprite.active { opacity: 1; filter: none; transform: scale(1.08);
+  box-shadow: 0 0 0 2px var(--primary), 0 4px 14px rgba(0,0,0,.12); }
+.char-sprite:hover:not(.active) { opacity: .8; transform: scale(1.03); }
+.char-sprite img { width: 100%; height: 100%; object-fit: contain; display: block;
+  pointer-events: none; user-select: none; -webkit-user-drag: none; }
+
+/* 角色动画：呼吸漂浮 */
+@keyframes charFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes charBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+@keyframes charSpeak {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.06) translateY(-2px); }
+  50% { transform: scale(1.02); }
+  75% { transform: scale(1.05) translateY(-1px); }
+}
+@keyframes hairSway {
+  0%, 100% { transform: rotate(0deg); }
+  33% { transform: rotate(1deg); }
+  66% { transform: rotate(-1deg); }
+}
+.char-ada { animation: charFloat 3.2s ease-in-out infinite, hairSway 4s ease-in-out infinite; }
+.char-ada.speaking { animation: charSpeak .8s ease-in-out 2; }
+.char-shima { animation: charFloat 3.2s ease-in-out infinite .5s, hairSway 4.5s ease-in-out infinite .7s; }
+.char-shima.speaking { animation: charSpeak .8s ease-in-out 2; }
+
+/* 公告 + 聊天区域 */
+.announce-area { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+/* 聊天框 */
+.chat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  overflow: hidden; font-size: 13.5px; }
+.chat-header { display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: linear-gradient(135deg, #e8d5f0, #f0e0f5); border-bottom: 1px solid var(--border); }
+.chat-title { font-weight: 800; font-size: 14px; color: #5a3a6e; }
+.chat-hint { font-size: 11.5px; color: #8b6fa8; opacity: .85; }
+.chat-messages { padding: 10px 14px; max-height: 220px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+  scroll-behavior: smooth; }
+.chat-msg { display: flex; gap: 8px; align-items: flex-start; max-width: 88%; animation: msgIn .25s ease-out; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.chat-msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.msg-avatar { width: 26px; height: 26px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+  background: #ede0f5; border: 1px solid #d9c5e8; }
+.chat-msg.user .msg-avatar { background: var(--primary-light, #c9b8e0); }
+.msg-bubble { background: #f5ecfa; color: #4a3060; padding: 7px 11px; border-radius: 12px;
+  line-height: 1.55; word-break: break-word; border: 1px solid #eadff3;
+  position: relative; }
+.chat-msg.user .msg-bubble { background: var(--primary); color: #fff;
+  border-color: var(--primary-strong); }
+.chat-msg.system .msg-bubble { background: #fff8e1; color: #7a6500;
+  border-color: #f0e0a0; font-style: italic; }
+.typing-dot { display: inline-block; width: 6px; height: 6px; margin: 0 1px;
+  border-radius: 50%; background: #a088b8; animation: typingBounce .6s infinite alternate; }
+.typing-dot:nth-child(2) { animation-delay: .15s; }
+.typing-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes typingBounce { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+.chat-input-row { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border);
+  background: #faf5fc; }
+.chat-input { flex: 1; border: 1px solid #d9c5e8; border-radius: 999px; padding: 6px 14px;
+  font-size: 13px; outline: none; background: #fff; color: var(--text);
+  transition: border-color .2s; }
+.chat-input:focus { border-color: var(--primary); }
+.chat-send { padding: 6px 16px; border-radius: 999px; border: none; background: var(--primary);
+  color: #fff; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap;
+  transition: opacity .15s; }
+.chat-send:hover { opacity: .88; }
+.chat-send:disabled { opacity: .45; cursor: default; }
+
+/* 响应式：窄屏角色缩小+聊天框全宽 */
+@media (max-width: 640px) {
+  .announce-row { flex-direction: column; }
+  .char-panel { align-self: center; }
+  .char-sprite { width: 58px; height: 80px; }
+}
