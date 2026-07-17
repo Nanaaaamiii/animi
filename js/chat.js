@@ -48,7 +48,8 @@
 1. 用第一人称回答（"我""俺"等）
 2. 回答控制在 ${MAX_WORDS} 个中文字以内（约 2~3 句话）
 3. 保持角色人设——不要变成客服机器人！如果不知道就诚实说"我不太清楚…"
-4. 可以适当加入角色特色反应（比如提到游戏眼睛会亮、提到岛村会不自在）`
+4. 可以适当加入角色特色反应（比如提到游戏眼睛会亮、提到岛村会不自在）
+5. 如果对方聊到某部番剧或社区里的帖子，可以结合给出的【参考资料】自然地评价、吐槽或安利，保持你的口吻（别像百科）`
     },
     shima: {
       name: "岛村",
@@ -76,7 +77,8 @@
 1. 用第一人称回答
 2. 回答控制在 ${MAX_WORDS} 个中文字以内（约 2~3 句话）
 3. 保持角色人设——要像个普通高中女生在聊天，不是百科全书！
-4. 可以提到妹妹ひな、游戏、放学后闲聊等日常话题`
+4. 可以提到妹妹ひな、游戏、放学后闲聊等日常话题
+5. 如果对方聊到某部番剧或社区里的帖子，可以结合给出的【参考资料】自然地评价、吐槽或安利，保持你的口吻（别像百科）`
     }
   };
 
@@ -102,11 +104,11 @@
       el.classList.add("active");
       currentChar = el.dataset.char || "ada";
       const ch = CHARACTERS[currentChar];
-      hint.textContent = "当前对话：" + ch.name + " · 点击另一人可切换";
+      hint.textContent = "正在和「" + ch.name + "」聊 · 记录三人共享，切换不丢";
       hint.style.color = ch.color;
-      history = [];               // 切换角色清空上下文（每人独立记忆）
+      // 切换角色【不清空】历史：安达/岛村/你共享同一段对话，营造三人闲聊感
       appendMsg("system", null,
-        "切换到「" + ch.name + "」啦～之前的对话已清空，开始新的话题吧！");
+        "（这会儿轮到「" + ch.name + "」接话啦～之前的聊天都还在，继续聊吧）");
     });
   });
 
@@ -124,7 +126,8 @@
       const reply = await callDeepSeek(text);
       hideTyping();
       appendMsg("assistant", currentChar, reply);
-      history.push({ role: "user", content: text }, { role: "assistant", content: reply });
+      history.push({ role: "user", content: text },
+                   { role: "assistant", content: reply, name: CHARACTERS[currentChar].name });
       triggerSpeak();
     } catch (e) {
       hideTyping();
@@ -138,9 +141,15 @@
   // ---- DeepSeek API 调用（经 Worker 代理） ----
   async function callDeepSeek(userMsg) {
     const ch = CHARACTERS[currentChar];
+    // 检索番剧/社区帖子作为参考资料，让角色能真实评价
+    let ctx = "";
+    try { ctx = await buildExtraContext(userMsg); } catch (e) { ctx = ""; }
+    const systemContent = ctx
+      ? ch.system + "\n\n【参考资料（仅供你参考，评价时可自然引用，不要照抄）】\n" + ctx
+      : ch.system;
     const messages = [
-      { role: "system", content: ch.system },
-      ...history.slice(-8),         // 保留最近 8 轮作为上下文
+      { role: "system", content: systemContent },
+      ...history.slice(-8),         // 保留最近 8 轮（含安达/岛村各自发言，name 标注说话人）
       { role: "user", content: userMsg }
     ];
 
@@ -179,6 +188,58 @@
                                  cut.lastIndexOf("\n"));
     if (lastPunct > MAX_WORDS * 1.2) cut = cut.slice(0, lastPunct + 1);
     return cut.trim() + "…";
+  }
+
+  // ---- 参考资料检索（让角色能评价番剧 / 社区帖子） ----
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))
+    ]);
+  }
+
+  async function fetchCommunityContext() {
+    try {
+      const sb = window.Community && window.Community.sb;
+      if (!sb) return "";
+      const { data, error } = await sb.from("forum_posts")
+        .select("title,body").order("created_at", { ascending: false }).limit(6);
+      if (error || !data || !data.length) return "";
+      return data.map(p => "·《" + (p.title || "无题") + "》" + (p.body ? "：" + p.body.slice(0, 160) : "")).join("\n");
+    } catch (e) { return ""; }
+  }
+
+  async function buildExtraContext(userMsg) {
+    const parts = [];
+    // 1) 番剧检索（站内 15000+ 部真实数据）
+    const DATA = window.ANIME_DATA;
+    if (Array.isArray(DATA) && DATA.length && /[一-鿿]/.test(userMsg)) {
+      const hits = [];
+      for (const a of DATA) {
+        const t = a.title || "", j = a.jp || "", e = a.en || "";
+        if ((t && userMsg.includes(t)) || (j && userMsg.includes(j)) || (e && userMsg.includes(e))) hits.push(a);
+      }
+      if (hits.length) {
+        hits.sort((x, y) => (y.rating || 0) - (x.rating || 0));
+        const block = hits.slice(0, 3).map(a => {
+          const g = (a.genres || []).join("/");
+          return "·《" + a.title + "》" + (a.jp ? "（" + a.jp + "）" : "") +
+            "：评分" + (a.rating || 0) + "｜" + (a.year || "?") + "年" + (a.season || "") +
+            "｜类型" + (g || "未知") + "｜" + (a.status || "") +
+            (a.studio ? "｜制作：" + a.studio : "") +
+            (a.summary ? "｜简介：" + a.summary.slice(0, 80) : "");
+        }).join("\n");
+        parts.push("【站内番剧资料】\n" + block);
+      }
+    }
+    // 2) 社区帖子（按需拉取，经 Worker 代理读 Supabase，best-effort + 超时保护）
+    if (/帖子|社区|大家|论坛|讨论区|最近|热帖|都在聊|评价一下/.test(userMsg)) {
+      try {
+        const posts = await withTimeout(fetchCommunityContext(), 2500);
+        if (posts) parts.push("【社区最近帖子】\n" + posts);
+      } catch (e) { /* 忽略，不影响聊天 */ }
+    }
+    return parts.join("\n\n");
   }
 
   // ---- UI 渲染 ----
