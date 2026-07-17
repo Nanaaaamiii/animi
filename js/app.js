@@ -8,7 +8,10 @@
   const WEEK = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const WEEK_EN = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
   // 免 VPN：Bangumi 公开 API 经反代（基地址见 js/config.js 的 PROXY_BASE）
-  const BGM_PROXY = window.APP_CONFIG.PROXY_BASE + "/bgm";
+  // Bangumi 详情/实时评分：浏览器【直连】api.bgm.tv（国产站，国内可通）。
+  // 不走 PROXY_BASE(腾讯云 SCF 广州节点连不上 api.bgm.tv)。
+  // CORS 若被拦，下方三处 fetch 均有优雅降级，保留本地烘焙值，站点照常可用。
+  const BGM_PROXY = "https://api.bgm.tv";
   // 动画资讯：B 站 UP 主（夏日幻听MCE / MCE汉化组）实时投稿 + 站内嵌入播放
   const BILI_UP_MID = 224267770;                 // 当前活跃账号 UID（旧号 7753700 已封禁）
   const BILI_UP_NAME = "夏日幻听MCE";
