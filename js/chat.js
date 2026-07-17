@@ -21,7 +21,7 @@
 
   // ---- 配置 ----
   const CHAT_PROXY = "https://kon.1770737253.workers.dev/chat";
-  const USER_AVATAR = "img/user-front.svg";  // 用户头像（替代默认 emoji）
+  const USER_AVATAR = "img/kon-logo.png";   // 用户头像（= 主页 K-ON 品牌 Logo）
   const MAX_WORDS = 50;          // 回复最大词数
   const CHARACTERS = {
     ada: {
