@@ -6,7 +6,7 @@
  * 注意：SUPABASE_ANON_KEY 占位符需由部署时填入真实 anon key。
  * ============================================================ */
 (function () {
-  const SUPABASE_URL = "https://k-on.eu.cc"; // 免 VPN：经 Cloudflare Worker 反代（deploy/cloudflare_worker.js）
+  const SUPABASE_URL = "https://kon.1770737253.workers.dev"; // 免 VPN：经 Cloudflare Worker 反代（deploy/cloudflare_worker.js）
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3cm5ucm93YnFpZG5tc2t2ZW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5ODM5MDIsImV4cCI6MjA5OTU1OTkwMn0.p3PqDi-blR-BEsmowy9QMfTuxpNggBmkqdh-P1Jchyc";
 
   const STATUS = { want: "想看", doing: "在看", done: "看过", hold: "搁置", drop: "抛弃" };
