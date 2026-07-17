@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>K-ON — 动画资讯站</title>
+  <meta name="description" content="K-ON 动画资讯站：本季新番、每周放送表、动画库、社区交流。" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 滚动进度条 -->
+  <div class="scroll-progress"><div class="bar"></div></div>
+
+  <!-- 顶部导航 -->
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#" data-view="home">
+        <span class="name">K-ON</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">☰</button>
+      <nav class="nav-links">
+        <a href="#" data-view="home" class="active">首页</a>
+        <a href="#" data-view="calendar">放送时间表</a>
+        <a href="#" data-view="browse">动画库</a>
+        <a href="#" data-view="news">动画资讯</a>
+        <a href="#" data-view="game">动画小游戏</a>
+        <a href="#" data-view="community">社区</a>
+        <a href="#" data-view="mine">我的</a>
+      </nav>
+      <div class="nav-right">
+        <label class="search-box">
+          <input id="global-search" type="text" placeholder="搜索动画 / 用户昵称 / UID…" />
+        </label>
+        <div class="user-search" id="user-search" hidden></div>
+        <div class="user-chip" id="user-chip"></div>
+        <button class="icon-btn msg-icon" id="msg-icon" aria-label="私信" hidden>
+          ✉<span class="msg-dot" id="msg-dot" hidden></span>
+        </button>
+        <button class="icon-btn" id="theme-toggle" aria-label="切换主题"></button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ 首页 ============ -->
+    <section id="view-home">
+      <!-- Hero -->
+      <div class="hero">
+        <canvas class="hero-canvas" id="hero-canvas"></canvas>
+        <div class="wrap hero-inner">
+          <div class="hero-badge fade-in-down"><span class="dot"></span> 发现 · 收藏 · 追番，一站搞定</div>
+          <p class="hero-sub fade-in-up"><span class="tw" id="hero-tw"></span></p>
+          <div class="hero-actions fade-in-up">
+            <a href="#" class="btn btn-primary magnetic to-browse">开始探索 →</a>
+            <a href="#" class="btn btn-ghost" data-view="calendar">本周放送表</a>
+          </div>
+          <div class="hero-stats fade-in-up">
+            <div class="stat"><div class="num" id="stat-count">0</div><div class="lbl">收录作品</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 首页公告栏 + AI 角色互动（安达 & 岛村） -->
+      <div class="announce-row wrap">
+        <!-- AI 角色：安达与岛村（可点击切换对话对象，CSS 动画） -->
+        <div class="char-panel" id="char-panel">
+          <div class="char-sprite char-ada active" data-char="ada" title="安达">
+            <img src="img/ada-front.png" alt="安达" loading="eager" />
+          </div>
+          <div class="char-sprite char-shima" data-char="shima" title="岛村">
+            <img src="img/shima-front.png" alt="岛村" loading="eager" />
+          </div>
+        </div>
+        <!-- 公告栏（站长可编辑）+ 聊天对话框 -->
+        <div class="announce-area">
+          <div id="announce-panel" class="announce-panel">
+            <!-- 由 community.js renderAnnouncement() 填充 -->
+            <div class="announce-loading">加载中…</div>
+          </div>
+          <!-- 聊天对话框 -->
+          <div class="chat-box" id="chat-box">
+            <div class="chat-header">
+              <span class="chat-title">💬 和她们聊聊</span>
+              <span class="chat-hint" id="chat-hint">点角色切换对话人 · 聊天记录三人共享 · 可问番剧/网站/任何问题</span>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-msg system">
+                <span class="msg-avatar">👋</span>
+                <span class="msg-bubble">嗨！我们是安达和岛村～点左边的人物就能和对应的人聊天哦。有什么想问的尽管说！</span>
+              </div>
+            </div>
+            <div class="chat-input-row">
+              <input class="chat-input" id="chat-input" type="text" placeholder="输入消息…" maxlength="200" />
+              <button class="chat-send" id="chat-send">发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 热门番剧 封面滚动播放 -->
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>热门番剧</div>
+            <div class="section-desc">本周放送番剧 · 封面自动滚动（点封面看详情）</div>
+          </div>
+        </div>
+        <div class="cover-marquee" id="cover-marquee"><div class="cover-track" id="cover-track"></div></div>
+      </div>
+
+      <!-- 本季新番 横向轮播 -->
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>本季新番</div>
+            <div class="section-desc">本季度最热门番剧 · 拖动卡片横向浏览</div>
+          </div>
+          <a href="#" class="section-more to-browse">查看全部 →</a>
+        </div>
+        <div class="carousel" id="featured-carousel">
+          <div class="carousel-track" id="featured-track"></div>
+        </div>
+      </div>
+
+      <!-- 编辑推荐 -->
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>站长推荐</div>
+            <div class="section-desc">站长私藏好番，闭眼入也不踩雷</div>
+          </div>
+        </div>
+        <div class="card-grid reveal" id="picks-grid"></div>
+      </div>
+
+      <!-- 动画小游戏入口 -->
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>动画小游戏</div>
+            <div class="section-desc">考验你对番剧评分的直觉</div>
+          </div>
+          <a href="#" class="section-more" data-view="game">开始挑战 →</a>
+        </div>
+        <div class="game-promo" id="game-promo"></div>
+      </div>
+    </section>
+
+    <!-- ============ 放送时间表 ============ -->
+    <section id="view-calendar" class="hidden">
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>放送时间表</div>
+            <div class="section-desc" id="cal-desc">每周放送 · 当前季度每日更新；每季度可翻看过往与未来番剧</div>
+          </div>
+        </div>
+        <div class="cal-tabs" id="cal-tabs">
+          <button class="cal-tab active" data-mode="week">📺 每周放送</button>
+          <button class="cal-tab" data-mode="season">🗓️ 每季度</button>
+        </div>
+        <div class="cal-nav" id="cal-season-nav"></div>
+        <div class="cal-grid reveal" id="cal-grid"></div>
+      </div>
+    </section>
+
+    <!-- ============ 动画库 ============ -->
+    <section id="view-browse" class="hidden">
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>动画库</div>
+            <div class="section-desc">按评分 / 类型 / 状态筛选，收录 Bangumi 真实动画资料</div>
+          </div>
+          <div class="filter-count" id="browse-count">共 0 部</div>
+        </div>
+        <div class="filter-bar" id="filter-bar">
+          <div class="filter-group">
+            <span class="filter-label">排序</span>
+            <div id="season-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            <button class="f-chip dir-btn" id="sort-dir" title="切换升序 / 降序">↓ 降序</button>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">类型</span>
+            <div id="genre-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">状态</span>
+            <div id="status-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          </div>
+        </div>
+        <div class="card-grid" id="browse-grid"></div>
+        <div id="browse-more-wrap" style="text-align:center;margin:28px 0;">
+          <button id="browse-more" class="load-more-btn" style="display:none;">加载更多</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 动画小游戏 ============ -->
+    <section id="view-game" class="hidden">
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>动画小游戏</div>
+            <div class="section-desc">从动画库随机抽取两部，猜猜谁评分更高</div>
+          </div>
+        </div>
+        <div id="game-root"></div>
+      </div>
+    </section>
+
+    <!-- ============ 我的 ============ -->
+    <section id="view-mine" class="hidden">
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>我的</div>
+            <div class="section-desc">收藏 · 我发的番剧评论 · 我发的论坛帖子</div>
+          </div>
+        </div>
+        <div class="mine-tabs" id="mine-tabs">
+          <button class="mine-tab active" data-mt="collect">我的收藏</button>
+          <button class="mine-tab" data-mt="reviews">番剧评论</button>
+          <button class="mine-tab" data-mt="posts">论坛帖子</button>
+        </div>
+        <!-- 收藏 -->
+        <div id="mine-collect" class="mine-pane">
+          <div class="mine-stats" id="mine-stats"></div>
+          <div class="filter-bar" id="mine-sort"></div>
+          <div class="filter-bar" id="mine-filter"></div>
+          <div class="card-grid" id="mine-grid"></div>
+          <div class="mine-empty" id="mine-empty" hidden>
+            <p>还没有收藏任何番剧。</p>
+            <a href="#" class="btn btn-primary to-browse">去动画库逛逛 →</a>
+          </div>
+        </div>
+        <!-- 番剧评论 -->
+        <div id="mine-reviews" class="mine-pane hidden">
+          <div class="post-list" id="mine-reviews-list"></div>
+          <div class="mine-empty-pane" id="mine-reviews-empty" hidden>还没有发过番剧评论，去番剧详情页或社区发一条吧～</div>
+        </div>
+        <!-- 论坛帖子 -->
+        <div id="mine-posts" class="mine-pane hidden">
+          <div class="post-list" id="mine-posts-list"></div>
+          <div class="mine-empty-pane" id="mine-posts-empty" hidden>还没有发过论坛帖子，去社区发一条吧～</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 社区 ============ -->
+    <section id="view-community" class="hidden">
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>社区</div>
+            <div class="section-desc">论坛交流 · 每部动画都能讨论 · 番剧评价广场</div>
+          </div>
+          <button class="btn btn-primary" id="new-post-btn" style="justify-content:center">＋ 发帖</button>
+        </div>
+        <div class="comm-tabs" id="comm-tabs">
+          <button class="comm-tab active" data-tab="forum">论坛</button>
+          <button class="comm-tab" data-tab="hot">社区热门</button>
+          <button class="comm-tab" data-tab="anime">番剧评价</button>
+        </div>
+        <div id="forum-sort" class="forum-sort" hidden>
+          <button class="sort-chip active" data-sort="new">最新</button>
+          <button class="sort-chip" data-sort="hot">最热</button>
+        </div>
+        <div id="forum-list" class="forum-list"></div>
+        <div id="comm-hot" class="card-grid hidden"></div>
+        <div id="comm-anime" class="review-list hidden"></div>
+      </div>
+    </section>
+
+    <!-- ============ 动画资讯 ============ -->
+    <section id="view-news" class="hidden">
+      <div class="section wrap">
+        <div class="section-head">
+          <div>
+            <div class="section-title"><span class="bar"></span>动画资讯</div>
+            <div class="section-desc">UP 主最新视频 · 帖文动态，一站式追更</div>
+          </div>
+          <button class="btn btn-ghost" id="news-refresh" style="justify-content:center">↻ 刷新</button>
+        </div>
+
+        <!-- UP 主视频 -->
+        <div class="news-block">
+          <div class="news-bili-grid" id="news-bili"></div>
+          <div class="news-bili-empty" id="news-bili-empty" hidden>暂时没有抓到视频，点右上角「刷新」重试。</div>
+          <div class="bili-pager" id="news-bili-pager"></div>
+        </div>
+
+        <!-- 站长推荐视频（仅站长可编辑：粘贴 B站链接即可嵌入） -->
+        <div class="news-block">
+          <div class="news-block-title">⭐ 站长推荐视频</div>
+          <div class="owner-videos-grid" id="owner-videos-grid"></div>
+        </div>
+
+        <!-- 帖文动态 / 资讯（置于站长推荐视频下方） -->
+        <div class="news-block">
+          <div class="news-block-title">📰 帖文动态 <button class="news-refresh-btn" id="news-feed-refresh" title="刷新资讯">↻ 刷新</button></div>
+          <div class="news-feed" id="news-feed"></div>
+          <div class="news-feed-pager" id="news-feed-pager"></div>
+          <div class="news-feed-empty" id="news-feed-empty" hidden>暂无资讯。爬虫会每小时从 Anime News Network 同步最新动画行业新闻，并自动翻译成中文。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+
+  <!-- 详情弹窗 -->
+  <div class="modal-mask" id="modal-mask">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <!-- 社区弹窗 -->
+  <div class="modal-mask" id="comm-mask">
+    <div class="modal" id="comm-modal"></div>
+  </div>
+
+  <!-- 页脚 -->
+  <footer>
+    <div class="wrap">
+      <div class="foot-grid">
+        <div class="foot-brand">
+          <div class="brand"><span class="name">K-ON</span></div>
+          <p>数据来源Bangumi</p>
+        </div>
+        <div class="foot-col">
+          <h5>导航</h5>
+          <a href="#" data-view="home">首页</a>
+          <a href="#" data-view="calendar">放送时间表</a>
+          <a href="#" data-view="browse">动画库</a>
+          <a href="#" data-view="news">动画资讯</a>
+          <a href="#" data-view="game">动画小游戏</a>
+          <a href="#" data-view="community">社区</a>
+        </div>
+        <div class="foot-col">
+          <h5>分类</h5>
+          <a href="#" data-view="browse">本季新番</a>
+          <a href="#" data-view="browse">经典佳作</a>
+          <a href="#" data-view="browse">剧场版</a>
+        </div>
+        <div class="foot-col">
+          <h5>关于</h5>
+          <a href="#">使用说明</a>
+          <a href="#">数据来源</a>
+          <a href="#">联系我们</a>
+        </div>
+      </div>
+      <div class="foot-bottom">© 2026 K-ON — 演示项目，非官方站点</div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/community.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/chat.js"></script>
+</body>
+</html>
