@@ -1662,37 +1662,94 @@
      站长填入 BV 号即可：自动拉取标题/作者/发布时间，显示为卡片，点击跳 B站播放
      （不再用内联 iframe，避免 B站禁止嵌入导致无法播放）。数据存 Supabase owner_videos 表。 */
   const BILI_VIEW = "https://kon.1770737253.workers.dev/bili/x/web-interface/view";
-  // 经 Worker 代理拉单条视频元数据（标题/作者/发布时间/封面）。Worker 未部署时静默失败，回退手动填。
-  async function fetchBiliMeta(bvid) {
-    try {
-      const r = await fetch(BILI_VIEW + "?bvid=" + bvid, { headers: { "Accept": "application/json" } });
-      if (!r.ok) return null;
-      const j = await r.json();
-      if (j && j.code === 0 && j.data) {
-        return {
-          title: j.data.title || "",
-          author: (j.data.owner && j.data.owner.name) || "",
-          pubdate: j.data.pubdate ? new Date(j.data.pubdate * 1000).toISOString() : null,
-          cover: (j.data.pic || "").replace(/^http:/, "https:").replace(/^\/\//, "https://")
-        };
-      }
-    } catch (e) { /* Worker 未部署时失败，忽略 */ }
+  // ⚠️ B站 BV 号大小写敏感（base58 编码），绝不能 toUpperCase！只把前缀 "BV" 统一大写，后 10 位原样保留。
+  function normBvid(raw) {
+    const m = String(raw || "").match(/BV[0-9A-Za-z]{8,}/i);
+    if (!m) return "";
+    return "BV" + m[0].slice(2);
+  }
+  // 封面走 weserv 代理，规避 B站图床防盗链 403。
+  function ovProxyImg(u) {
+    if (!u) return "";
+    return "https://images.weserv.nl/?url=" + encodeURIComponent(u.replace(/^https?:\/\//, "")) + "&w=480&h=300&fit=cover&output=jpg&q=82";
+  }
+  function parseBiliView(j) {
+    if (j && j.code === 0 && j.data) {
+      return {
+        title: j.data.title || "",
+        author: (j.data.owner && j.data.owner.name) || "",
+        pubdate: j.data.pubdate ? new Date(j.data.pubdate * 1000).toISOString() : null,
+        cover: (j.data.pic || "").replace(/^http:/, "https:").replace(/^\/\//, "https://")
+      };
+    }
     return null;
   }
+  // 通道①：Worker 代理（部署后最稳，带浏览器 UA/Referer 防风控）
+  async function fetchViaWorker(bvid) {
+    try {
+      const r = await fetch(BILI_VIEW + "?bvid=" + encodeURIComponent(bvid), { headers: { "Accept": "application/json" } });
+      if (!r.ok) return null;
+      return parseBiliView(await r.json());
+    } catch (e) { return null; }
+  }
+  // 通道②：JSONP（<script> 注入，绕过浏览器跨域限制，Worker 未部署也能自动识别）
+  function fetchViaJsonp(bvid) {
+    return new Promise((resolve) => {
+      const cb = "__biliCb" + Math.random().toString(36).slice(2);
+      const s = document.createElement("script");
+      let done = false;
+      const cleanup = () => { try { delete window[cb]; } catch (e) { window[cb] = undefined; } s.remove(); };
+      window[cb] = (j) => { if (done) return; done = true; cleanup(); resolve(parseBiliView(j)); };
+      s.onerror = () => { if (done) return; done = true; cleanup(); resolve(null); };
+      setTimeout(() => { if (done) return; done = true; cleanup(); resolve(null); }, 6000);
+      s.src = "https://api.bilibili.com/x/web-interface/view?bvid=" + encodeURIComponent(bvid) + "&jsonp=jsonp&callback=" + cb;
+      document.head.appendChild(s);
+    });
+  }
+  // 拉单条视频元数据（标题/作者/发布时间/封面）：先试 Worker，再试 JSONP，都失败回退手动填。
+  async function fetchBiliMeta(bvid) {
+    const id = normBvid(bvid); if (!id) return null;
+    return (await fetchViaWorker(id)) || (await fetchViaJsonp(id));
+  }
+  // 站内内置播放器（B站官方 embed，isOutside=true 支持外站嵌入）
+  function openBiliPlayer(bvid, title) {
+    const bid = normBvid(bvid) || bvid;
+    const old = document.getElementById("bili-player-mask"); if (old) old.remove();
+    const mask = document.createElement("div");
+    mask.id = "bili-player-mask"; mask.className = "bili-player-mask";
+    const src = "https://player.bilibili.com/player.html?isOutside=true&bvid=" + encodeURIComponent(bid) + "&p=1&autoplay=0&danmaku=0&high_quality=1";
+    mask.innerHTML = `<div class="bili-player-box" role="dialog" aria-modal="true">
+        <div class="bili-player-head">
+          <span class="bili-player-title">${esc(title || bid)}</span>
+          <a class="bili-player-ext" href="https://www.bilibili.com/video/${esc(bid)}" target="_blank" rel="noopener">在B站打开 ↗</a>
+          <button class="bili-player-close" aria-label="关闭">✕</button>
+        </div>
+        <div class="bili-player-frame">
+          <iframe src="${src}" scrolling="no" frameborder="no" framespacing="0" allowfullscreen="true" referrerpolicy="no-referrer"></iframe>
+        </div>
+      </div>`;
+    document.body.appendChild(mask);
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape") close(); };
+    function close() { mask.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); }
+    mask.querySelector(".bili-player-close").onclick = close;
+    mask.addEventListener("click", (e) => { if (e.target === mask) close(); });
+    document.addEventListener("keydown", onKey);
+  }
   function ovCardHTML(v) {
-    const url = "https://www.bilibili.com/video/" + esc(v.bvid);
+    const cover = ovProxyImg(v.cover);
     const sub = [v.author, v.pubdate ? timeAgo(v.pubdate) : null].filter(Boolean).join(" · ");
-    return `<a class="ov-cell" href="${url}" target="_blank" rel="noopener">
+    return `<div class="ov-cell" data-bvid="${esc(v.bvid)}" data-title="${esc(v.title || v.bvid)}" role="button" tabindex="0">
         <div class="ov-cover">
-          ${v.cover ? `<img src="${esc(v.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : `<div class="ov-noimg">📺</div>`}
-          <span class="bili-play">▶ 在B站播放</span>
+          ${cover ? `<img src="${cover}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : `<div class="ov-noimg">📺</div>`}
+          <span class="bili-play">▶ 播放</span>
         </div>
         <div class="ov-meta">
           <div class="ov-title">${esc(v.title || ("B站视频 " + v.bvid))}</div>
-          <div class="ov-sub">${esc(sub || "点击查看")}</div>
+          <div class="ov-sub">${esc(sub || "点击播放")}</div>
         </div>
         ${isWebmaster() ? `<button class="op-remove" data-id="${v.id}" title="删除">✕</button>` : ""}
-      </a>`;
+      </div>`;
   }
   async function renderOwnerVideos(host) {
     if (!host) return;
@@ -1712,6 +1769,12 @@
     }
     host.innerHTML = list.map(ovCardHTML).join("") +
       (isWebmaster() ? `<div style="grid-column:1/-1;text-align:center;margin-top:8px"><button class="btn btn-ghost" id="ov-add">＋ 添加 / 管理</button></div>` : "");
+    // 点击卡片 → 站内内置播放
+    host.querySelectorAll(".ov-cell").forEach(cell => {
+      const open = () => openBiliPlayer(cell.dataset.bvid, cell.dataset.title);
+      cell.addEventListener("click", (e) => { if (e.target.closest(".op-remove")) return; open(); });
+      cell.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
     host.querySelectorAll(".op-remove").forEach(b => b.onclick = async (e) => {
       e.preventDefault(); e.stopPropagation();
       await sb.from("owner_videos").delete().eq("id", +b.dataset.id);
@@ -1726,7 +1789,7 @@
       <div class="comm-title">添加站长推荐视频</div>
       <div class="cb-row"><span class="cb-label">BV 号</span>
         <input id="ov-bvid" class="auth-input" placeholder="填 BV 号，如 BV1xxxx（也可直接粘贴视频链接）" /></div>
-      <div class="auth-hint" id="ov-hint" style="font-size:12px;color:var(--text-faint);margin:-4px 0 6px">输入 BV 号后会自动拉取标题/作者/发布时间（需 Worker 代理；拉不到也可手填）。</div>
+      <div class="auth-hint" id="ov-hint" style="font-size:12px;color:var(--text-faint);margin:-4px 0 6px">填 BV 号或粘贴视频链接，自动识别标题/作者/发布时间/封面；识别不到可手填（不影响站内播放）。</div>
       <div class="cb-row"><span class="cb-label">标题</span>
         <input id="ov-title" class="auth-input" placeholder="自动填充，可改" /></div>
       <div class="cb-row"><span class="cb-label">作者</span>
@@ -1737,31 +1800,32 @@
       <div class="comm-actions"><button class="btn btn-primary" id="ov-save">添加</button></div>`;
     $("#comm-close").onclick = closeComm; mask.classList.add("open"); document.body.style.overflow = "hidden";
     const bvInput = $("#ov-bvid"), titleI = $("#ov-title"), authorI = $("#ov-author"), dateI = $("#ov-date"), hint = $("#ov-hint"), err = $("#ov-err");
-    let lastFetched = "";
+    let lastFetched = "", fetchedCover = null, fetchedPubISO = null;
     bvInput.addEventListener("input", async () => {
-      const m = bvInput.value.trim().match(/BV[0-9A-Za-z]+/i);
-      const bvid = m ? m[0].toUpperCase() : "";
+      const bvid = normBvid(bvInput.value);
       if (!bvid || bvid === lastFetched) return;
       lastFetched = bvid;
       hint.textContent = "正在拉取视频信息…";
       const meta = await fetchBiliMeta(bvid);
       if (meta) {
+        fetchedCover = meta.cover || null; fetchedPubISO = meta.pubdate || null;
         if (!titleI.value) titleI.value = meta.title || "";
         if (!authorI.value) authorI.value = meta.author || "";
         if (!dateI.value && meta.pubdate) dateI.value = new Date(meta.pubdate).toLocaleDateString("zh-CN");
-        hint.textContent = "已自动填充标题/作者/发布时间，可修改后添加。";
+        hint.textContent = "已自动识别标题/作者/发布时间/封面，可修改后添加。";
       } else {
-        hint.textContent = "未能自动拉取（Worker 未部署？），请手动填写后添加。";
+        hint.textContent = "未能自动识别，请手动填写标题/作者/发布时间后添加（不影响内置播放）。";
       }
     });
     $("#ov-save").onclick = async () => {
-      const m = bvInput.value.trim().match(/BV[0-9A-Za-z]+/i);
-      if (!m) { err.textContent = "请填写 BV 号（或粘贴含 BVxxxx 的视频链接）"; return; }
-      const bvid = m[0].toUpperCase();
-      const row = { bvid, title: titleI.value.trim() || null, author: authorI.value.trim() || null, added_by: USER.id };
+      const bvid = normBvid(bvInput.value);
+      if (!bvid) { err.textContent = "请填写 BV 号（或粘贴含 BVxxxx 的视频链接）"; return; }
+      const row = { bvid, title: titleI.value.trim() || null, author: authorI.value.trim() || null, cover: fetchedCover || null, added_by: USER.id };
       if (dateI.value.trim()) {
         const t = Date.parse(dateI.value.trim());
         if (!isNaN(t)) row.pubdate = new Date(t).toISOString();
+      } else if (fetchedPubISO) {
+        row.pubdate = fetchedPubISO;
       }
       const { error } = await sb.from("owner_videos").insert(row);
       if (error) { err.textContent = "添加失败：" + error.message; return; }
@@ -2172,7 +2236,7 @@
     searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot,
     renderAnnouncement, renderEpisodeBox,
     getUser: getCurrentUser,
-    renderOwnerVideos, openOwnerVideoAdder
+    renderOwnerVideos, openOwnerVideoAdder, openBiliPlayer
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
