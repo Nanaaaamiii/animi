@@ -20,7 +20,7 @@
   "use strict";
 
   // ---- 配置 ----
-  const CHAT_PROXY = "https://kon.1770737253.workers.dev/chat";
+  const CHAT_PROXY = window.APP_CONFIG.PROXY_BASE + "/chat";
   const USER_AVATAR_FALLBACK = "img/kon-logo.png";  // 未登录时回退：主页 K-ON Logo
 
   // 取当前登录用户在社区里上传的头像；未登录则用站点 Logo

@@ -6,7 +6,7 @@
  * 注意：SUPABASE_ANON_KEY 占位符需由部署时填入真实 anon key。
  * ============================================================ */
 (function () {
-  const SUPABASE_URL = "https://kon.1770737253.workers.dev"; // 免 VPN：经 Cloudflare Worker 反代（deploy/cloudflare_worker.js）
+  const SUPABASE_URL = window.APP_CONFIG.PROXY_BASE; // 经反代（国内镜像请改为国内可直连地址，见 js/config.js）
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3cm5ucm93YnFpZG5tc2t2ZW1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5ODM5MDIsImV4cCI6MjA5OTU1OTkwMn0.p3PqDi-blR-BEsmowy9QMfTuxpNggBmkqdh-P1Jchyc";
 
   const STATUS = { want: "想看", doing: "在看", done: "看过", hold: "搁置", drop: "抛弃" };
@@ -1675,17 +1675,17 @@
   /* ---------------- 站长推荐视频（仅站长可编辑） ----------------
      站长填入 BV 号即可：自动拉取标题/作者/发布时间，显示为卡片，点击跳 B站播放
      （不再用内联 iframe，避免 B站禁止嵌入导致无法播放）。数据存 Supabase owner_videos 表。 */
-  const BILI_VIEW = "https://kon.1770737253.workers.dev/bili/x/web-interface/view";
+  const BILI_VIEW = window.APP_CONFIG.PROXY_BASE + "/bili/x/web-interface/view";
   // ⚠️ B站 BV 号大小写敏感（base58 编码），绝不能 toUpperCase！只把前缀 "BV" 统一大写，后 10 位原样保留。
   function normBvid(raw) {
     const m = String(raw || "").match(/BV[0-9A-Za-z]{8,}/i);
     if (!m) return "";
     return "BV" + m[0].slice(2);
   }
-  // 封面走 weserv 代理，规避 B站图床防盗链 403。
+  // 封面走反代 /img（规避 B站图床防盗链 403 + 国内免 VPN）。
   function ovProxyImg(u) {
     if (!u) return "";
-    return "https://images.weserv.nl/?url=" + encodeURIComponent(u.replace(/^https?:\/\//, "")) + "&w=480&h=300&fit=cover&output=jpg&q=82";
+    return window.APP_CONFIG.PROXY_BASE + "/img?url=" + encodeURIComponent(u.replace(/^https?:\/\//, "")) + "&w=480&h=300&fit=cover&output=jpg&q=82";
   }
   function parseBiliView(j) {
     if (j && j.code === 0 && j.data) {

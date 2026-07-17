@@ -7,12 +7,12 @@
   const DATA = window.ANIME_DATA || [];
   const WEEK = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const WEEK_EN = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
-  // 免 VPN：Bangumi 公开 API 经 Cloudflare Worker 反代（配置见 deploy/cloudflare_worker.js）
-  const BGM_PROXY = "https://kon.1770737253.workers.dev/bgm";
+  // 免 VPN：Bangumi 公开 API 经反代（基地址见 js/config.js 的 PROXY_BASE）
+  const BGM_PROXY = window.APP_CONFIG.PROXY_BASE + "/bgm";
   // 动画资讯：B 站 UP 主（夏日幻听MCE / MCE汉化组）实时投稿 + 站内嵌入播放
   const BILI_UP_MID = 224267770;                 // 当前活跃账号 UID（旧号 7753700 已封禁）
   const BILI_UP_NAME = "夏日幻听MCE";
-  const BILI_PROXY = "https://kon.1770737253.workers.dev/bili"; // Worker 反代 api.bilibili.com（实时刷新；失败回退静态 bili_feed.json）
+  const BILI_PROXY = window.APP_CONFIG.PROXY_BASE + "/bili"; // 反代 api.bilibili.com（实时刷新；失败回退静态 bili_feed.json）
   const NEWS_TABLE = "news";                     // Supabase 资讯表（RSS / Twitter 经 RSSHub 同步）
 
   // 封面渐变色板（按 id 取色，保证稳定 & 美观）
@@ -1024,6 +1024,31 @@
   function heroStats() {
     // 仅保留「收录作品」计数（平均评分 / 高分番剧 已移除）
     countUp($("#stat-count"), DATA.length, 1400, 0);
+    // 注册人数：异步从 Supabase 取 profiles 计数（代理不可达时静默回退「—」）
+    loadUserCount();
+  }
+
+  /* 注册人数：查询 Supabase profiles 表行数。
+     依赖 window.Community.sb（community.js 异步初始化），故先等待其就绪；
+     若代理不可达（如国内无 VPN 访问 Cloudflare Worker），静默回退为「—」。 */
+  async function loadUserCount() {
+    const el = $("#stat-users");
+    if (!el) return;
+    let sb = window.Community && window.Community.sb;
+    for (let i = 0; i < 25 && !sb; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      sb = window.Community && window.Community.sb;
+    }
+    if (!sb) { el.textContent = "—"; return; }
+    try {
+      const { count, error } = await sb
+        .from("profiles")
+        .select("*", { count: "exact", head: true });
+      if (error) { el.textContent = "—"; return; }
+      countUp(el, count || 0, 1400, 0);
+    } catch (e) {
+      el.textContent = "—";
+    }
   }
 
   /* ---------------- 暗色模式 ---------------- */
