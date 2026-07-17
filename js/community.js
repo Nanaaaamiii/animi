@@ -755,6 +755,7 @@
           <div class="post-title">${esc(p.title)}</div>
           <div class="post-body">${esc(p.body)}</div>
           ${imagesHTML(p.images)}
+          ${videosHTML(p.videos)}
           <div class="post-meta">${uLink(`<span class="c-av">${avatarHTML(names[p.user_id], p.user_id, "xs")}</span>`, p.user_id)}<span class="u-link" data-uid="${p.user_id}">@${esc((names[p.user_id] && names[p.user_id].username) || "用户")}</span>${roleTag(names[p.user_id])}${uidTag(names[p.user_id])}<span>${timeAgo(p.created_at)}</span><span>👁 ${p.views || 0}</span><span>💬 ${cnt[p.id] || 0}</span></div>
           <div class="post-actions">
             <button class="like-btn ${myLikes.has(p.id) ? "liked" : ""}" data-pid="${p.id}" data-n="${p.like_count || 0}">❤️ <span class="lk-count">${p.like_count || 0}</span></button>
@@ -763,6 +764,8 @@
         </div>
       </div>`).join("");
     $$(".post-card", wrap).forEach(c => c.onclick = () => openPost(c.dataset.id));
+    wrap.querySelectorAll(".post-video-cell").forEach(cell => cell.addEventListener("click", (e) => { e.stopPropagation(); openBiliPlayer(cell.dataset.bvid, cell.dataset.title); }));
+    wrap.querySelectorAll(".post-video-cell").forEach(cell => cell.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); openBiliPlayer(cell.dataset.bvid, cell.dataset.title); } }));
     wrap.querySelectorAll(".like-btn").forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleForumLike(b.dataset.pid, b); });
     wrap.querySelectorAll(".pin-btn").forEach(b => b.onclick = async (e) => {
       e.stopPropagation();
@@ -807,6 +810,7 @@
         </div>
         <div class="post-body" style="white-space:pre-wrap">${esc(post.body)}</div>
         ${imagesHTML(post.images)}
+        ${videosHTML(post.videos)}
         <div class="post-meta">${uLink(`<span class="c-av">${avatarHTML(names[post.user_id], post.user_id, "xs")}</span>`, post.user_id)}<span class="u-link" data-uid="${post.user_id}">@${esc((names[post.user_id] && names[post.user_id].username) || "用户")}</span>${roleTag(names[post.user_id])}${uidTag(names[post.user_id])}<span>${timeAgo(post.created_at)}</span><span>👁 ${views}</span></div>
         <div class="post-actions">
           <button class="like-btn ${liked ? "liked" : ""}" id="post-like" data-pid="${id}" data-n="${post.like_count || 0}">❤️ <span class="lk-count">${post.like_count || 0}</span></button>
@@ -825,6 +829,8 @@
         </div>
       </div>`;
     $("#comm-close").onclick = closeComm;
+    modal.querySelectorAll(".post-video-cell").forEach(cell => cell.addEventListener("click", () => openBiliPlayer(cell.dataset.bvid, cell.dataset.title)));
+    modal.querySelectorAll(".post-video-cell").forEach(cell => cell.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBiliPlayer(cell.dataset.bvid, cell.dataset.title); } }));
     const likeBtn = $("#post-like"); if (likeBtn) likeBtn.onclick = () => toggleForumLike(id, likeBtn);
     const pinBtn = $("#post-pin"); if (pinBtn) pinBtn.onclick = async () => {
       const ok = await setPin(id, pinBtn.dataset.pin !== "1");
@@ -881,16 +887,23 @@
       <button class="modal-close" id="comm-close">✕</button>
       <div class="comm-title">发帖</div>
       <input id="post-title" class="auth-input" placeholder="标题" maxlength="60"/>
-      <textarea id="post-body" class="cb-textarea" placeholder="分享点什么…（支持插入图片）" style="min-height:140px"></textarea>
+      <textarea id="post-body" class="cb-textarea" placeholder="分享点什么…（支持插入图片与视频）" style="min-height:140px"></textarea>
       <div class="ac-thumbs" id="post-thumbs"></div>
       <div class="ac-bar">
         <label class="ac-imgbtn" title="插入图片">🖼️ 图片
           <input type="file" id="post-file" accept="image/*" multiple hidden>
         </label>
+        <button type="button" class="ac-imgbtn" id="post-video-btn" title="插入 B站视频">🎬 视频</button>
+        <span class="ac-vcount" id="post-vcount" style="font-size:12px;color:var(--text-faint)"></span>
       </div>
       <div class="auth-err" id="post-err"></div>
       <button class="btn btn-primary" id="post-send" style="width:100%;justify-content:center">发布</button>`;
     $("#comm-close").onclick = closeComm;
+    // 视频选择逻辑（所有人可发，无权限限制）
+    let pendingVideos = [];
+    const vcount = $("#post-vcount"), videoBtn = $("#post-video-btn");
+    function refreshVcount() { if (vcount) vcount.textContent = pendingVideos.length ? `已选 ${pendingVideos.length} 个视频` : ""; }
+    if (videoBtn) videoBtn.onclick = () => openVideoPicker(pendingVideos, (list) => { pendingVideos = list; refreshVcount(); });
     // 图片选择逻辑
     let pendingImgs = [];
     const thumbsEl = $("#post-thumbs"), fileInput = $("#post-file");
@@ -920,6 +933,7 @@
         if (pendingImgs.length) { sendBtn.textContent = "上传中…"; for (const f of pendingImgs) imgUrls.push(await uploadCommentImage(f)); }
         const row = { user_id: USER.id, title, body };
         if (imgUrls.length) row.images = imgUrls;
+        if (pendingVideos.length) row.videos = pendingVideos;
         const { error } = await sb.from("forum_posts").insert(row);
         if (error) { $("#post-err").textContent = "发布失败：" + error.message; return; }
         await awardExp(); closeComm(); renderForum();
@@ -1735,6 +1749,94 @@
     mask.querySelector(".bili-player-close").onclick = close;
     mask.addEventListener("click", (e) => { if (e.target === mask) close(); });
     document.addEventListener("keydown", onKey);
+  }
+
+  /* ---------------- 论坛帖子内嵌视频（所有人可发） ----------------
+     视频作为 forum_posts.videos(jsonb 数组) 的一部分存储，不单独建表。
+     复用 normBvid + 双通道 fetchBiliMeta(Worker/jsonp) 自动识别元数据。 */
+
+  // 视频卡片（论坛用，无删除按钮；点击弹出站内播放）
+  function forumVideoCardHTML(v) {
+    const cover = ovProxyImg(v.cover);
+    const sub = [v.author, v.pubdate ? timeAgo(v.pubdate) : null].filter(Boolean).join(" · ");
+    return `<div class="ov-cell post-video-cell" data-bvid="${esc(v.bvid)}" data-title="${esc(v.title || v.bvid)}" role="button" tabindex="0">
+        <div class="ov-cover">
+          ${cover ? `<img src="${cover}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">` : `<div class="ov-noimg">📺</div>`}
+          <span class="bili-play">▶ 播放</span>
+        </div>
+        <div class="ov-meta">
+          <div class="ov-title">${esc(v.title || ("B站视频 " + v.bvid))}</div>
+          <div class="ov-sub">${esc(sub || "点击播放")}</div>
+        </div>
+      </div>`;
+  }
+  // 视频网格容器（带 🎬 标题）
+  function videosHTML(list) {
+    if (!Array.isArray(list) || !list.length) return "";
+    return `<div class="post-videos"><div class="post-videos-title">🎬 视频</div><div class="post-videos-grid">${list.map(forumVideoCardHTML).join("")}</div></div>`;
+  }
+  // 独立遮罩的视频选择器：复用 normBvid + fetchBiliMeta(W/A 双通道)，所有人可用
+  function openVideoPicker(initial, onPick) {
+    const old = document.getElementById("video-picker-mask"); if (old) old.remove();
+    let picked = Array.isArray(initial) ? initial.slice() : [];
+    const mask = document.createElement("div");
+    mask.id = "video-picker-mask"; mask.className = "video-picker-mask";
+    const renderPicked = () => {
+      const box = $("#vp-picked", mask);
+      if (!box) return;
+      box.innerHTML = picked.length
+        ? picked.map((v, i) => `<div class="vp-item"><img src="${esc(ovProxyImg(v.cover))}" onerror="this.style.visibility='hidden'"><div class="vp-meta"><div class="vp-t">${esc(v.title || v.bvid)}</div><div class="vp-s">${esc(v.author || "")} · ${esc(v.bvid)}</div></div><button class="vp-x" data-i="${i}">✕</button></div>`).join("")
+        : `<div class="vp-empty">还没有添加视频，填 BV 号或粘贴链接试试。</div>`;
+      box.querySelectorAll(".vp-x").forEach(b => b.onclick = () => { picked.splice(+b.dataset.i, 1); renderPicked(); });
+    };
+    const close = () => { mask.remove(); document.body.style.overflow = ""; };
+    mask.innerHTML = `<div class="video-picker-box" role="dialog" aria-modal="true">
+        <div class="vp-head"><b>插入 B站视频</b><button class="vp-close" aria-label="关闭">✕</button></div>
+        <div class="vp-body">
+          <div class="cb-row"><span class="cb-label">BV 号 / 链接</span>
+            <input id="vp-input" class="auth-input" placeholder="填 BV 号，如 BV1xxxx，或直接粘贴视频链接" /></div>
+          <div class="auth-hint" id="vp-hint" style="font-size:12px;color:var(--text-faint);margin:-4px 0 8px">自动识别标题/作者/发布时间/封面；识别不到可手填。</div>
+          <div class="cb-row"><span class="cb-label">标题</span><input id="vp-title" class="auth-input" placeholder="自动填充，可改" /></div>
+          <div class="cb-row"><span class="cb-label">作者</span><input id="vp-author" class="auth-input" placeholder="自动填充，可改" /></div>
+          <div class="cb-row"><span class="cb-label">发布时间</span><input id="vp-date" class="auth-input" placeholder="自动填充，可改" /></div>
+          <button class="btn btn-ghost" id="vp-add" style="width:100%;justify-content:center;margin-bottom:12px">＋ 加入这条视频</button>
+          <div class="vp-picked" id="vp-picked"></div>
+        </div>
+        <div class="vp-foot"><button class="btn btn-primary" id="vp-done" style="flex:1;justify-content:center">完成（${picked.length}）</button></div>
+      </div>`;
+    document.body.appendChild(mask);
+    document.body.style.overflow = "hidden";
+    const input = $("#vp-input", mask), hint = $("#vp-hint", mask), titleI = $("#vp-title", mask), authorI = $("#vp-author", mask), dateI = $("#vp-date", mask);
+    let lastBvid = "", fetchedCover = null, fetchedPubISO = null;
+    input.addEventListener("input", async () => {
+      const bvid = normBvid(input.value);
+      if (!bvid || bvid === lastBvid) return;
+      lastBvid = bvid;
+      hint.textContent = "正在识别…";
+      const meta = await fetchBiliMeta(bvid);
+      if (meta) {
+        fetchedCover = meta.cover || null; fetchedPubISO = meta.pubdate || null;
+        if (!titleI.value) titleI.value = meta.title || "";
+        if (!authorI.value) authorI.value = meta.author || "";
+        if (!dateI.value && meta.pubdate) dateI.value = new Date(meta.pubdate).toLocaleDateString("zh-CN");
+        hint.textContent = "已自动识别，可修改后加入。";
+      } else {
+        hint.textContent = "未能自动识别，可手动填标题/作者/时间。";
+      }
+    });
+    $("#vp-add", mask).onclick = () => {
+      const bvid = normBvid(input.value);
+      if (!bvid) { hint.textContent = "请先填 BV 号或粘贴含 BV 的视频链接。"; return; }
+      let pubdate = fetchedPubISO;
+      if (dateI.value.trim() && !isNaN(Date.parse(dateI.value.trim()))) pubdate = new Date(Date.parse(dateI.value.trim())).toISOString();
+      picked.push({ bvid, title: titleI.value.trim() || null, author: authorI.value.trim() || null, pubdate, cover: fetchedCover || null });
+      input.value = ""; titleI.value = ""; authorI.value = ""; dateI.value = ""; lastBvid = ""; fetchedCover = null; fetchedPubISO = null; hint.textContent = "已加入，可继续添加或点完成。";
+      renderPicked();
+      const done = $("#vp-done", mask); if (done) done.textContent = "完成（" + picked.length + "）";
+    };
+    $("#vp-done", mask).onclick = () => { onPick(picked.slice()); close(); };
+    $("#vp-close", mask).onclick = close;
+    mask.addEventListener("click", (e) => { if (e.target === mask) close(); });
   }
   function ovCardHTML(v) {
     const cover = ovProxyImg(v.cover);

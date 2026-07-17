@@ -1040,6 +1040,30 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .ov-title { font-size: 14px; font-weight: 700; line-height: 1.4; padding-right: 26px; }
 .ov-sub { margin-top: 6px; font-size: 12px; color: var(--text-faint); font-weight: 600; }
 
+/* 论坛帖子内嵌视频网格 */
+.post-videos { margin-top: 12px; }
+.post-videos-title { font-size: 13px; font-weight: 700; color: var(--text-faint); margin-bottom: 8px; }
+.post-videos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+
+/* 视频选择器（独立遮罩） */
+.video-picker-mask { position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; animation: fadeIn .16s ease; }
+.video-picker-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 480px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.45); display: flex; flex-direction: column; max-height: 88vh; }
+.vp-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.vp-head b { flex: 1; font-size: 15px; }
+.vp-close { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+.vp-close:hover { border-color: var(--primary); color: var(--primary); }
+.vp-body { padding: 14px 16px; overflow-y: auto; }
+.vp-picked { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.vp-empty { font-size: 12px; color: var(--text-faint); padding: 8px 0; }
+.vp-item { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
+.vp-item img { width: 72px; height: 44px; object-fit: cover; border-radius: 6px; flex: none; background: #000; }
+.vp-meta { flex: 1; min-width: 0; }
+.vp-t { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-s { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-x { background: transparent; border: 1px solid var(--border); color: var(--text-faint); width: 24px; height: 24px; border-radius: 6px; cursor: pointer; flex: none; }
+.vp-x:hover { border-color: #e74c3c; color: #e74c3c; }
+.vp-foot { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; }
+
 .news-bili-empty, .news-feed-empty { color: var(--text-faint); font-size: 14px; padding: 18px 0; }
 
 /* 站内 B 站播放器弹窗 */
