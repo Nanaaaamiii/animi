@@ -595,8 +595,16 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .watch-box h4 { font-size: 16px; font-weight: 900; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
 .watch-box h4::before { content: ""; width: 5px; height: 18px; border-radius: 3px; background: linear-gradient(180deg, var(--primary), var(--accent)); }
 .watch-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.watch-loading, .watch-empty { color: var(--text-faint); font-size: 13px; padding: 10px 2px; }
+.watch-loading, .watch-empty, .watch-sub { grid-column: 1 / -1; color: var(--text-faint); font-size: 13px; padding: 10px 2px 2px; }
+.watch-sub { font-weight: 800; color: var(--text-soft); padding-bottom: 0; }
 .watch-empty a { color: var(--primary-strong); font-weight: 700; }
+/* 全网平台一键搜索入口 */
+.watch-platforms { margin-top: 16px; }
+.watch-platforms .wp-label { font-size: 13px; font-weight: 800; color: var(--text-soft); margin-bottom: 9px; }
+.watch-platforms .wp-btns { display: flex; flex-wrap: wrap; gap: 9px; }
+.watch-platforms .wp-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; color: #fff; background: var(--wp, var(--primary)); text-decoration: none; box-shadow: 0 3px 10px rgba(0,0,0,.14); transition: transform .16s var(--ease), box-shadow .16s var(--ease), filter .16s var(--ease); }
+.watch-platforms .wp-btn::after { content: "↗"; font-size: 11px; opacity: .85; }
+.watch-platforms .wp-btn:hover { transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 7px 18px rgba(0,0,0,.22); }
 .watch-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform .18s var(--ease), box-shadow .18s var(--ease); }
 .watch-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,.18); }
 .watch-card .wc-cover { position: relative; aspect-ratio: 16/10; background: #111; }

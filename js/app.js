@@ -620,8 +620,9 @@
         <div class="collect-box" id="collect-box"></div>
         <div class="episode-box" id="episode-box"></div>
         <div class="watch-box" id="watch-box">
-          <h4>📺 在线观看（B 站）</h4>
+          <h4>📺 在线观看</h4>
           <div class="watch-list" id="watch-list"><div class="watch-loading">正在搜索 B站资源…</div></div>
+          <div class="watch-platforms" id="watch-platforms"></div>
         </div>
       </div>`;
     $("#modal-close").onclick = closeModal;
@@ -641,12 +642,33 @@
     refreshLiveRating(a);   // 详情打开时实时拉取 Bangumi 最新评分（拉不到则用烘焙值）
   }
 
-  // 番剧详情「📺 观看」：用片名去 B站搜索可播放结果（WBI 签名 + JSONP，走用户自身 IP）
+  // 全网正规视频平台「一键搜索」入口。这些平台无公开跨域接口/不许第三方内嵌，
+  // 故只做搜索页跳转（新标签打开），用片名（优先中文名）作关键词。合规、任何地区可用。
+  const WATCH_PLATFORMS = [
+    { name: "哔哩哔哩", color: "#fb7299", url: k => "https://search.bilibili.com/all?keyword=" + encodeURIComponent(k) },
+    { name: "爱奇艺",   color: "#00c250", url: k => "https://so.iqiyi.com/so/q_" + encodeURIComponent(k) },
+    { name: "腾讯视频", color: "#ff9d00", url: k => "https://v.qq.com/x/search/?q=" + encodeURIComponent(k) },
+    { name: "优酷",     color: "#1f9bff", url: k => "https://so.youku.com/search_video/q_" + encodeURIComponent(k) },
+    { name: "AcFun",    color: "#fd4c5b", url: k => "https://www.acfun.cn/search?keyword=" + encodeURIComponent(k) },
+    { name: "芒果TV",   color: "#ff5f00", url: k => "https://so.mgtv.com/so?k=" + encodeURIComponent(k) },
+  ];
+  function renderWatchPlatforms(kw, jp) {
+    const pbox = $("#watch-platforms");
+    if (!pbox) return;
+    const k = kw || jp;
+    if (!k) { pbox.innerHTML = ""; return; }
+    pbox.innerHTML = '<div class="wp-label">全网搜索（跳转到平台）</div><div class="wp-btns">' +
+      WATCH_PLATFORMS.map(p => `<a class="wp-btn" href="${p.url(k)}" target="_blank" rel="noopener" style="--wp:${p.color}">${esc(p.name)}</a>`).join("") +
+      '</div>';
+  }
+
+  // 番剧详情「📺 观看」：B站站内搜+播（WBI 签名 + JSONP，走用户自身 IP）+ 全网平台一键搜索
   function renderWatch(a) {
-    const box = $("#watch-list");
-    if (!box) return;
     const kw = a.title || "";
     const jp = a.jp || "";
+    renderWatchPlatforms(kw, jp);   // 全网入口始终渲染（不依赖 B站搜索结果）
+    const box = $("#watch-list");
+    if (!box) return;
     if (!kw && !jp) { box.innerHTML = '<div class="watch-empty">暂无可搜索的片名</div>'; return; }
     if (!(window.Community && window.Community.searchBili)) {
       box.innerHTML = `<div class="watch-empty"><a href="https://search.bilibili.com/all?keyword=${encodeURIComponent(kw)}" target="_blank" rel="noopener">在 B站搜索《${esc(kw)}》↗</a></div>`;
@@ -654,10 +676,10 @@
     }
     window.Community.searchBili(kw, jp).then(list => {
       if (!list || !list.length) {
-        box.innerHTML = `<div class="watch-empty">未找到 B站资源，<a href="https://search.bilibili.com/all?keyword=${encodeURIComponent(kw)}" target="_blank" rel="noopener">在 B站搜索《${esc(kw)}》↗</a></div>`;
+        box.innerHTML = `<div class="watch-empty">未找到 B站可内嵌资源，可用下方「全网搜索」跳转平台观看。</div>`;
         return;
       }
-      box.innerHTML = list.slice(0, 8).map(v => `
+      box.innerHTML = `<div class="watch-sub">B站可站内播放</div>` + list.slice(0, 8).map(v => `
         <div class="watch-card" data-bvid="${esc(v.bvid)}" data-title="${esc(v.title)}" role="button" tabindex="0">
           <div class="wc-cover"><img src="${esc(v.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'"><span class="wc-play">▶</span></div>
           <div class="wc-meta"><div class="wc-title">${esc(v.title)}</div>${v.author ? `<div class="wc-author">${esc(v.author)}</div>` : ""}</div>
