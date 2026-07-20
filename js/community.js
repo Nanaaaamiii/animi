@@ -1366,6 +1366,8 @@
     if (mt === "posts") return renderMinePosts();
 
     // ---- 收藏 ----
+    const syncBar = document.getElementById("mine-bgm-sync");
+    if (syncBar && window.BgmSync) window.BgmSync.renderSyncBar(syncBar);
     const { data, error } = await sb.from("collections").select("*").eq("user_id", USER.id);
     if (error) { grid.innerHTML = `<div class="err">${esc(error.message)}</div>`; return; }
     let list = (data || []).map(c => ({ a: window.ANIME_DATA.find(x => x.id === c.anime_id), c })).filter(x => x.a);
