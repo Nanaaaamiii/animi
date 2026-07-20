@@ -731,6 +731,14 @@
   window.renderGameRoot = renderGameRoot;   // 顶层挂载，供游戏内「返回」按钮内联调用
   function closeModal() {
     const m = $("#modal-mask"); if (m) m.classList.remove("open");
+    // 卸载 modal 内的 B站 iframe：仅隐藏(.open 移除)不会停止跨域 iframe 的音频，
+    // 必须把 iframe 导航到 about:blank 并清空内容，否则关掉弹窗声音仍继续。
+    const f = $("#modal iframe");
+    if (f) {
+      try { f.src = "about:blank"; } catch (e) {}
+      try { if (f.contentWindow && f.contentWindow.stop) f.contentWindow.stop(); } catch (e) {}
+      try { $("#modal").innerHTML = ""; } catch (e) {}
+    }
     document.body.style.overflow = "";
   }
 

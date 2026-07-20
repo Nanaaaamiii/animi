@@ -1725,10 +1725,21 @@
     const id = normBvid(bvid); if (!id) return null;
     return (await fetchViaWorker(id)) || (await fetchViaJsonp(id));
   }
+  // 彻底销毁播放器：先卸载 iframe（导航到 about:blank）以强制停止音频，再移除节点。
+  // 仅 mask.remove() 在部分浏览器（尤其跨域 iframe）下音频仍会继续，必须把 iframe 卸载。
+  function destroyBiliPlayer(m) {
+    if (!m) return;
+    const f = m.querySelector ? m.querySelector("iframe") : null;
+    if (f) {
+      try { f.src = "about:blank"; } catch (e) {}
+      try { if (f.contentWindow && f.contentWindow.stop) f.contentWindow.stop(); } catch (e) {}
+    }
+    m.remove();
+  }
   // 站内内置播放器（B站官方 embed，isOutside=true 支持外站嵌入）
   function openBiliPlayer(bvid, title) {
     const bid = normBvid(bvid) || bvid;
-    const old = document.getElementById("bili-player-mask"); if (old) old.remove();
+    const old = document.getElementById("bili-player-mask"); if (old) destroyBiliPlayer(old);
     const mask = document.createElement("div");
     mask.id = "bili-player-mask"; mask.className = "bili-player-mask";
     const src = "https://player.bilibili.com/player.html?isOutside=true&bvid=" + encodeURIComponent(bid) + "&p=1&autoplay=0&danmaku=0&high_quality=1";
@@ -1745,7 +1756,7 @@
     document.body.appendChild(mask);
     document.body.style.overflow = "hidden";
     const onKey = (e) => { if (e.key === "Escape") close(); };
-    function close() { mask.remove(); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); }
+    function close() { destroyBiliPlayer(mask); document.body.style.overflow = ""; document.removeEventListener("keydown", onKey); }
     mask.querySelector(".bili-player-close").onclick = close;
     mask.addEventListener("click", (e) => { if (e.target === mask) close(); });
     document.addEventListener("keydown", onKey);
