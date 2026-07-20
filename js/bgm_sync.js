@@ -112,7 +112,7 @@
     for (let page = 0; page < 20; page++) {
       const offset = page * 50;
       try {
-        const r = await fetch(base + "/v0/users/" + encodeURIComponent(name) + "/collections?subject_type=2&limit=50&offset=" + offset, {
+        const r = await fetch(base + "/bgm/v0/users/" + encodeURIComponent(name) + "/collections?subject_type=2&limit=50&offset=" + offset, {
           headers: { "Authorization": "Bearer " + acct.access_token, "Accept": "application/json" }
         });
         if (!r.ok) { toast("拉取 Bangumi 失败：" + r.status); break; }
