@@ -3,7 +3,7 @@
  * 依赖：window.APP_CONFIG.PROXY_BASE、window.Community(sb / isAuthed / renderMine / init)
  *
  * 流程：
- *   1) 点「绑定 Bangumi」→ 跳 bgm.tv OAuth（response_type=code, scope=collection）
+ *   1) 点「绑定 Bangumi」→ 跳 bgm.tv OAuth（response_type=code；Bangumi 的 scope 参数未实现，不传 scope）
  *   2) Bangumi 回跳到 {PROXY_BASE}/bgm/oauth/callback（代理用 secret 换 token）
  *   3) 代理把 token 以 #bgm_token=...&bgm_name=... 重定向回本站
  *   4) 本模块读 hash → 存 bgm_accounts → 拉 /v0/users/{name}/collections → upsert 进 collections
@@ -48,7 +48,6 @@
       + "?response_type=code"
       + "&client_id=" + encodeURIComponent(BGM_CLIENT_ID)
       + "&redirect_uri=" + encodeURIComponent(cb)
-      + "&scope=collection"
       + "&state=" + encodeURIComponent(returnTo);
     location.href = url;
   }
