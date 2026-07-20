@@ -1736,6 +1736,117 @@
     }
     m.remove();
   }
+  // ============================================================
+  // B站整站搜索（WBI 签名 + JSONP，浏览器直连，走用户自身 IP）
+  // 用途：每部番剧详情弹窗里「📺 观看」→ 用片名搜 B站并返回可播放结果。
+  // 关键：B站搜索接口需 WBI 签名，且数据中心 IP 会被风控(412)，故在浏览器端
+  //       做签名 + JSONP 直连，走用户真实 IP，国内无 VPN 也能用，不依赖反代。
+  // ============================================================
+  const WBI_REV = [46,47,18,2,53,8,23,32,15,50,10,31,58,3,45,35,27,43,5,49,33,9,42,19,29,28,14,39,12,38,41,13,37,48,7,16,24,55,40,61,26,17,0,1,60,51,30,4,22,25,54,21,56,59,6,63,57,62,11,36,20,34,44,52];
+  let _wbiMixin = null;
+
+  // 纯 JS MD5（已与 Node crypto 对拍验证；WBI 必须 MD5）。输出为小端 32 位字拼接。
+  function md5(text) {
+    const msg = unescape(encodeURIComponent(text));
+    const m = msg.length;
+    const n = (((m + 8) >> 6) + 1) * 16;
+    const x = new Array(n).fill(0);
+    for (let i = 0; i < m; i++) x[i >> 2] |= msg.charCodeAt(i) << ((i & 3) * 8);
+    x[m >> 2] |= 0x80 << ((m & 3) * 8);
+    x[n - 2] = m * 8;
+    const T = [
+      0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
+      0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
+      0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
+      0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
+      0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
+      0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
+      0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
+      0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391
+    ];
+    const rol = (v, s) => (v << s) | (v >>> (32 - s));
+    let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+    for (let k = 0; k < n; k += 16) {
+      let A = a0, B = b0, C = c0, D = d0;
+      for (let r = 0; r < 64; r++) {
+        let F, g, s;
+        if (r < 16)      { F = (B & C) | (~B & D); g = r;                 s = [7,12,17,22][r % 4]; }
+        else if (r < 32) { F = (D & B) | (~D & C); g = (5 * r + 1) % 16;  s = [5,9,14,20][r % 4]; }
+        else if (r < 48) { F = B ^ C ^ D;          g = (3 * r + 5) % 16;  s = [4,11,16,23][r % 4]; }
+        else             { F = C ^ (B | ~D);       g = (7 * r) % 16;      s = [6,10,15,21][r % 4]; }
+        F = ((F >>> 0) + (A >>> 0) + T[r] + (x[k + g] >>> 0)) >>> 0;
+        A = D; D = C; C = B;
+        B = (B + rol(F, s)) >>> 0;
+      }
+      a0 = (a0 + A) >>> 0; b0 = (b0 + B) >>> 0; c0 = (c0 + C) >>> 0; d0 = (d0 + D) >>> 0;
+    }
+    const hx = (v) => {
+      v = v >>> 0;
+      return ((v & 0xff).toString(16).padStart(2, "0")) + ((v >>> 8 & 0xff).toString(16).padStart(2, "0")) +
+             ((v >>> 16 & 0xff).toString(16).padStart(2, "0")) + ((v >>> 24 & 0xff).toString(16).padStart(2, "0"));
+    };
+    return hx(a0) + hx(b0) + hx(c0) + hx(d0);
+  }
+
+  function wbiMixinKey(img, sub) {
+    const mix = (img || "") + (sub || "");
+    let out = "";
+    for (let i = 0; i < 32; i++) out += mix[WBI_REV[i]];
+    return out;
+  }
+  function wbiSign(params, mixin) {
+    const sorted = {};
+    Object.keys(params).sort().forEach(k => sorted[k] = params[k]);
+    const q = new URLSearchParams(sorted).toString();
+    return md5(q + mixin);
+  }
+  function jsonp(url, timeout = 9000) {
+    return new Promise((resolve, reject) => {
+      const cb = "__biliCb" + Math.random().toString(36).slice(2);
+      const s = document.createElement("script");
+      let done = false;
+      const cleanup = () => { try { delete window[cb]; } catch (e) { window[cb] = undefined; } s.remove(); };
+      window[cb] = (j) => { if (done) return; done = true; cleanup(); resolve(j); };
+      s.onerror = () => { if (done) return; done = true; cleanup(); reject(new Error("jsonp error")); };
+      setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error("jsonp timeout")); }, timeout);
+      s.src = url + (url.includes("?") ? "&" : "?") + "jsonp=jsonp&callback=" + cb;
+      document.head.appendChild(s);
+    });
+  }
+  async function getWbiMixin() {
+    if (_wbiMixin) return _wbiMixin;
+    const j = await jsonp("https://api.bilibili.com/x/web-interface/nav");
+    const img = (j && j.data && j.data.wbi_img && j.data.wbi_img.img_url || "").split("/").pop().split(".")[0];
+    const sub = (j && j.data && j.data.wbi_img && j.data.wbi_img.sub_url || "").split("/").pop().split(".")[0];
+    _wbiMixin = wbiMixinKey(img, sub);
+    return _wbiMixin;
+  }
+  async function searchBiliRaw(keyword) {
+    const mixin = await getWbiMixin();
+    const wts = Math.floor(Date.now() / 1000);
+    const w_rid = wbiSign({ keyword, wts }, mixin);
+    const q = new URLSearchParams({ keyword, wts, w_rid }).toString();
+    const url = "https://api.bilibili.com/x/web-interface/wbi/search/all/v2?" + q;
+    const j = await jsonp(url);
+    const groups = (j && j.data && j.data.result) || [];
+    const videoGroup = groups.find(g => g.result_type === "video");
+    const items = (videoGroup && videoGroup.data) || [];
+    return items.map(it => ({
+      bvid: it.bvid,
+      title: (it.title || "").replace(/<[^>]+>/g, ""),
+      cover: (it.pic || "").replace(/^http:/, "https:"),
+      author: it.author || "",
+    })).filter(x => x.bvid);
+  }
+  // 对外：番剧搜索，优先中文名，无结果再试日文名
+  async function searchBili(keyword, jpKeyword) {
+    try {
+      let r = await searchBiliRaw(keyword);
+      if ((!r || !r.length) && jpKeyword && jpKeyword !== keyword) r = await searchBiliRaw(jpKeyword);
+      return r || [];
+    } catch (e) { return []; }
+  }
+
   // 站内内置播放器（B站官方 embed，isOutside=true 支持外站嵌入）
   function openBiliPlayer(bvid, title) {
     const bid = normBvid(bvid) || bvid;
@@ -2349,7 +2460,7 @@
     searchUsers, renderOwnerPicks, openProfile, toggleFollow, refreshMsgDot,
     renderAnnouncement, renderEpisodeBox,
     getUser: getCurrentUser,
-    renderOwnerVideos, openOwnerVideoAdder, openBiliPlayer
+    renderOwnerVideos, openOwnerVideoAdder, openBiliPlayer, searchBili
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
