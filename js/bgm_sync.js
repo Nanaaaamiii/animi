@@ -60,8 +60,21 @@
     const token = decodeURIComponent(mT[1]);
     const mN = h.match(/bgm_name=([^&]+)/);
     const mU = h.match(/bgm_uid=([^&]+)/);
-    const bgm_name = mN ? decodeURIComponent(mN[1]) : "";
-    const bgm_uid = mU ? decodeURIComponent(mU[1]) : "";
+    let bgm_name = mN ? decodeURIComponent(mN[1]) : "";
+    let bgm_uid = mU ? decodeURIComponent(mU[1]) : "";
+    // 兜底：Worker 未回传用户名时（token 响应本就不含 username），用 token 调 /v0/me 自己取
+    if (!bgm_name) {
+      try {
+        const meR = await fetch(proxyBase() + "/bgm/v0/me", {
+          headers: { "Authorization": "Bearer " + token, "Accept": "application/json" }
+        });
+        if (meR.ok) {
+          const me = await meR.json();
+          bgm_name = me.username || "";
+          if (!bgm_uid && me.id != null) bgm_uid = String(me.id);
+        }
+      } catch (e) { /* 忽略，走下方缺用户名提示 */ }
+    }
     history.replaceState(null, "", location.pathname + location.search);
 
     const user = await ensureUser();
