@@ -127,7 +127,7 @@
     <div class="mal-card mal-table-card">
       <h2>📋 全部条目</h2>
       <div class="mal-toolbar">
-        <div class="mal-search"><input type="text" id="mal-search" placeholder="搜索动画名（中文 / 日文 / 英文 / MAL 标题）…" /></div>
+        <div class="mal-search"><input type="text" id="mal-search" placeholder="模糊搜索（中文 / 日文 / 英文均可）…" /></div>
         <div class="mal-count" id="mal-count"></div>
       </div>
       <div class="mal-table-wrap">
@@ -160,6 +160,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
   <script src="js/mal_bgm_data.js"></script>
   <script>
     (function(){
@@ -294,10 +295,23 @@
       }));
       renderList('mal-high');
 
-      /* ---------------- 完整列表 + 搜索 ---------------- */
+      /* ---------------- 完整列表 + 模糊搜索 ---------------- */
+      const fuse = new Fuse(DATA, {
+        keys: [
+          { name: 'title', weight: 2 },
+          { name: 'jp', weight: 1.5 },
+          { name: 'mal_title', weight: 1.5 },
+          { name: 'mal_title_en', weight: 1 }
+        ],
+        threshold: 0.4,
+        minMatchCharLength: 1,
+        includeScore: true,
+        ignoreLocation: true
+      });
+
       let filtered = DATA.slice();
       let sortKey = 'bgm_rank';
-      let sortDir = 1; // 1 asc, -1 desc
+      let sortDir = 1;
       let page = 1;
 
       function getValue(d, key){
@@ -316,15 +330,11 @@
         });
       }
       function applySearch(){
-        const q = $('#mal-search').value.trim().toLowerCase();
+        const q = $('#mal-search').value.trim();
         if (!q) { filtered = DATA.slice(); }
         else {
-          filtered = DATA.filter(d =>
-            (d.title || '').toLowerCase().includes(q) ||
-            (d.jp || '').toLowerCase().includes(q) ||
-            (d.mal_title || '').toLowerCase().includes(q) ||
-            (d.mal_title_en || '').toLowerCase().includes(q)
-          );
+          const results = fuse.search(q);
+          filtered = results.map(r => r.item);
         }
         page = 1;
         sortData();
