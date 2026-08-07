@@ -1,7 +1,8 @@
 /* MAL vs Bangumi 评分/排名对比 — 嵌入 SPA 视图 */
 (function(){
   "use strict";
-  const DATA = (window.MAL_BGM_DATA || []).filter(x => x.bgm_score && x.mal_score && x.bgm_rank && x.mal_rank);
+  const DATA = (window.MAL_BGM_DATA || []).filter(x => x.mal_score && x.mal_rank);
+  const CHART_DATA = DATA.filter(x => x.bgm_score != null);  // 图表只用有BGM评分的
   const PAGE_SIZE = 50;
   let chart = null, chartMode = 'score', initialized = false;
   let filtered = DATA.slice(), sortKey = 'bgm_rank', sortDir = 1, page = 1;
@@ -11,8 +12,8 @@
   const $$ = (s, r) => Array.from((r||document).querySelectorAll(s));
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function cssVar(name){ return getComputedStyle(document.body).getPropertyValue(name).trim(); }
-  const scoreDiff = d => +(d.mal_score - d.bgm_score).toFixed(2);
-  const rankDiff = d => d.bgm_rank - d.mal_rank;
+  const scoreDiff = d => d.bgm_score != null ? +(d.mal_score - d.bgm_score).toFixed(2) : null;
+  const rankDiff = d => d.bgm_rank != null ? d.bgm_rank - d.mal_rank : null;
 
   /* ---------------- 初始化入口 ---------------- */
   window.MalCompare = {
@@ -34,9 +35,9 @@
 
     // 统计
     const root = $('#view-mal');
-    const malHigh = DATA.filter(d => scoreDiff(d) > 0).length;
-    const bgmHigh = DATA.length - malHigh;
-    const avgDiff = DATA.reduce((s,d)=>s+scoreDiff(d),0)/DATA.length;
+    const malHigh = CHART_DATA.filter(d => scoreDiff(d) > 0).length;
+    const bgmHigh = CHART_DATA.length - malHigh;
+    const avgDiff = CHART_DATA.reduce((s,d)=>s+scoreDiff(d),0)/CHART_DATA.length;
     $('#stat-mal-count',root).textContent = DATA.length;
     $('#stat-mal-high',root).textContent = malHigh;
     $('#stat-bgm-high',root).textContent = bgmHigh;
@@ -88,8 +89,8 @@
       : d => rankDiff(d) > 0 ? '#2e9d8a' : '#e8628a';
     return [{
       label: mode === 'score' ? '评分' : '排名',
-      data: DATA.map(d => ({ x: mode==='score'?d.bgm_score:d.bgm_rank, y: mode==='score'?d.mal_score:d.mal_rank, d: d })),
-      backgroundColor: DATA.map(d => color(d)), pointRadius: 4, pointHoverRadius: 7
+      data: CHART_DATA.map(d => ({ x: mode==='score'?d.bgm_score:d.bgm_rank, y: mode==='score'?d.mal_score:d.mal_rank, d: d })),
+      backgroundColor: CHART_DATA.map(d => color(d)), pointRadius: 4, pointHoverRadius: 7
     }];
   }
   function renderChart(){
@@ -133,8 +134,8 @@
   /* ---------------- 差异 TOP ---------------- */
   function renderDiffTop(kind, root){
     const list = kind === 'mal-high'
-      ? DATA.slice().sort((a,b) => scoreDiff(b)-scoreDiff(a)).slice(0,30)
-      : DATA.slice().sort((a,b) => scoreDiff(a)-scoreDiff(b)).slice(0,30);
+      ? CHART_DATA.slice().sort((a,b) => scoreDiff(b)-scoreDiff(a)).slice(0,30)
+      : CHART_DATA.slice().sort((a,b) => scoreDiff(a)-scoreDiff(b)).slice(0,30);
     $('#diff-list',root).innerHTML = list.map(d => {
       const diff = scoreDiff(d), cls = diff>0?'pos':'neg', sign = diff>0?'+':'';
       return `<a class="mal-item" href="${esc(d.mal_url)}" target="_blank" rel="noopener">
@@ -170,14 +171,16 @@
 
     tbody.innerHTML = items.map(d => {
       const sd=scoreDiff(d), rd=rankDiff(d);
-      const sc=sd>0?'pos':sd<0?'neg':'', rc=rd>0?'pos':rd<0?'neg':'';
+      const sc=sd!=null&&sd>0?'pos':sd!=null&&sd<0?'neg':'', rc=rd!=null&&rd>0?'pos':rd!=null&&rd<0?'neg':'';
+      const sdSign=sd!=null&&sd>0?'+':'';
+      const rdSign=rd!=null&&rd>0?'+':'';
       return `<tr>
         <td class="cover-cell"><img src="${esc(d.cover||'')}" alt="" loading="lazy" onerror="this.style.display='none'"></td>
         <td class="cell-title"><div class="name"><a href="${esc(d.bgm_url)}" target="_blank" rel="noopener">${esc(d.title||d.jp)}</a></div><div class="alt">${esc(d.mal_title||d.mal_title_en||d.jp)}</div></td>
-        <td class="cell-score">${d.bgm_score}</td><td class="cell-score">${d.mal_score}</td>
-        <td class="diff-val ${sc}">${sd>0?'+':''}${sd.toFixed(2)}</td>
-        <td>#${d.bgm_rank}</td><td>#${d.mal_rank}</td>
-        <td class="diff-val ${rc}">${rd>0?'+':''}${rd}</td></tr>`;
+        <td class="cell-score">${d.bgm_score!=null?d.bgm_score:'—'}</td><td class="cell-score">${d.mal_score}</td>
+        <td class="diff-val ${sc}">${sd!=null?sdSign+sd.toFixed(2):'—'}</td>
+        <td>${d.bgm_rank!=null?'#'+d.bgm_rank:'—'}</td><td>#${d.mal_rank}</td>
+        <td class="diff-val ${rc}">${rd!=null?rdSign+rd:'—'}</td></tr>`;
     }).join('');
 
     const pg = $('#mal-pagination',root);
