@@ -2,7 +2,7 @@
 (function(){
   "use strict";
   const DATA = (window.MAL_BGM_DATA || []).filter(x => x.mal_score && x.mal_rank);
-  const CHART_DATA = DATA.filter(x => x.bgm_score != null);  // 图表只用有BGM评分的
+  const CHART_DATA = DATA.filter(x => x.bgm_score != null && x.bgm_rank != null);
   const PAGE_SIZE = 50;
   let chart = null, chartMode = 'score', initialized = false;
   let filtered = DATA.slice(), sortKey = 'bgm_rank', sortDir = 1, page = 1;
