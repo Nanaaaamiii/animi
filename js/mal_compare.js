@@ -69,10 +69,9 @@
       if (p >= 1 && p <= Math.ceil(filtered.length / PAGE_SIZE)) { page = p; renderTable(root); }
     });
 
-    // 排序
+    // 排序（仅数字列，标题/封面不排序）
     $$('.mal-table th[data-key]',root).forEach(th => th.addEventListener('click', () => {
       const key = th.dataset.key;
-      if (key === 'cover') return;
       if (sortKey === key) sortDir = -sortDir; else { sortKey = key; sortDir = 1; }
       $$('.mal-table th .arrow',root).forEach(a => a.textContent = '');
       (th.querySelector('.arrow')||{}).textContent = sortDir===1?'▲':'▼';
