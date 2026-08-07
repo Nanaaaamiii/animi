@@ -25,7 +25,7 @@
         <a href="#" data-view="news">动画资讯</a>
         <a href="#" data-view="game">动画小游戏</a>
         <a href="#" data-view="community">社区</a>
-        <a href="mal.html">MAL 对比</a>
+        <a href="#" data-view="mal">MAL 对比</a>
         <a href="#" data-view="mine">我的</a>
       </nav>
       <div class="nav-right">
@@ -308,6 +308,72 @@
         </div>
       </div>
     </section>
+    <!-- ============ MAL vs Bangumi 对比 ============ -->
+    <section id="view-mal" class="hidden">
+      <div class="wrap mal-wrap">
+        <div class="mal-head">
+          <h1>MAL vs Bangumi</h1>
+          <p>MyAnimeList 与 Bangumi 评分 / 排名差异可视化。全量 Bangumi 动画在 MAL 中有映射的条目。</p>
+        </div>
+        <div class="mal-stats">
+          <div class="mal-stat"><div class="num" id="stat-mal-count">—</div><div class="lbl">对比条目</div></div>
+          <div class="mal-stat"><div class="num" id="stat-mal-high">—</div><div class="lbl">MAL 偏高（部）</div></div>
+          <div class="mal-stat"><div class="num" id="stat-bgm-high">—</div><div class="lbl">Bangumi 偏高（部）</div></div>
+          <div class="mal-stat"><div class="num" id="stat-avg-diff">—</div><div class="lbl">平均分差</div></div>
+        </div>
+        <div class="mal-grid">
+          <div class="mal-card">
+            <h2>📊 评分散点图</h2>
+            <div class="mal-tabs">
+              <button class="mal-tab active" data-mode="score">评分对比</button>
+              <button class="mal-tab" data-mode="rank">排名对比</button>
+            </div>
+            <div class="mal-chart-wrap"><canvas id="scatterChart"></canvas></div>
+          </div>
+          <div class="mal-card">
+            <h2>🏆 差异 TOP</h2>
+            <div class="mal-tabs">
+              <button class="mal-tab active" data-list="mal-high">MAL 更高</button>
+              <button class="mal-tab" data-list="bgm-high">Bangumi 更高</button>
+            </div>
+            <div class="mal-list" id="diff-list"></div>
+          </div>
+        </div>
+        <div class="mal-card mal-table-card">
+          <h2>📋 全部条目</h2>
+          <div class="mal-toolbar">
+            <div class="mal-search"><input type="text" id="mal-search" placeholder="模糊搜索（中文 / 日文 / 英文均可）…" /></div>
+            <div class="mal-count" id="mal-count"></div>
+          </div>
+          <div class="mal-table-wrap">
+            <table class="mal-table" id="mal-table">
+              <thead>
+                <tr>
+                  <th data-key="cover"></th>
+                  <th data-key="title">标题 <span class="arrow"></span></th>
+                  <th data-key="bgm_score">Bangumi <span class="arrow"></span></th>
+                  <th data-key="mal_score">MAL <span class="arrow"></span></th>
+                  <th data-key="score_diff">分差 (MAL−BGM) <span class="arrow"></span></th>
+                  <th data-key="bgm_rank">B 排名 <span class="arrow"></span></th>
+                  <th data-key="mal_rank">M 排名 <span class="arrow"></span></th>
+                  <th data-key="rank_diff">排名差 <span class="arrow"></span></th>
+                </tr>
+              </thead>
+              <tbody id="mal-tbody"></tbody>
+            </table>
+            <div class="mal-empty" id="mal-empty" hidden>没有找到匹配的动画。</div>
+          </div>
+          <div class="mal-pagination" id="mal-pagination"></div>
+        </div>
+        <div class="mal-foot">
+          数据来源：<a href="https://bgm.tv" target="_blank" rel="noopener">Bangumi</a>、
+          <a href="https://myanimelist.net" target="_blank" rel="noopener">MyAnimeList</a>、
+          <a href="https://github.com/Rhilip/BangumiExtLinker" target="_blank" rel="noopener">BangumiExtLinker</a>、
+          <a href="https://github.com/meesvandongen/anime-dataset" target="_blank" rel="noopener">anime-dataset</a>。
+        </div>
+      </div>
+    </section>
+
   </main>
 
 
@@ -337,7 +403,7 @@
           <a href="#" data-view="news">动画资讯</a>
           <a href="#" data-view="game">动画小游戏</a>
           <a href="#" data-view="community">社区</a>
-          <a href="mal.html">MAL 对比</a>
+          <a href="#" data-view="mal">MAL 对比</a>
         </div>
         <div class="foot-col">
           <h5>分类</h5>
@@ -357,10 +423,14 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/data.js"></script>
+  <script src="js/mal_bgm_data.js"></script>
   <script src="js/community.js"></script>
   <script src="js/bgm_sync.js"></script>
+  <script src="js/mal_compare.js"></script>
   <script src="js/app.js"></script>
   <script src="js/chat.js"></script>
 </body>

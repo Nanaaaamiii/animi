@@ -73,7 +73,7 @@
   }
 
   /* ---------------- 视图切换 (SPA) ---------------- */
-  const views = ["home", "calendar", "browse", "news", "game", "community", "mine"];
+  const views = ["home", "calendar", "browse", "news", "game", "community", "mine", "mal"];
   function showView(name) {
     if (!views.includes(name)) name = "home";
     views.forEach(v => $("#view-" + v).classList.toggle("hidden", v !== name));
@@ -90,6 +90,7 @@
     if (name === "community" && window.Community) Community.renderForum();
     if (name === "game") renderGameRoot();
     if (name === "news") renderNews();
+    if (name === "mal" && window.MalCompare) window.MalCompare.render();
     setTimeout(refreshVisibleRatings, 350); // 视图切换后刷新可见卡片的实时评分
   }
 

@@ -1256,3 +1256,61 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
 .bgm-sync-tip { font-size: 14px; color: var(--text-2, #8a7e86); }
 .bgm-sync-ok { font-size: 14px; font-weight: 700; }
 .bgm-sync .btn-sm { padding: 6px 14px; font-size: 13px; }
+
+/* ---------- MAL vs Bangumi 对比页 ---------- */
+#view-mal .mal-wrap { padding: 34px 0 60px; }
+#view-mal .mal-head { margin-bottom: 28px; }
+#view-mal .mal-head h1 { font-size: clamp(28px, 4vw, 46px); font-weight: 900; letter-spacing: -1px; margin-bottom: 10px; }
+#view-mal .mal-head p { color: var(--text-soft); font-size: 15px; }
+#view-mal .mal-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 28px; }
+#view-mal .mal-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; box-shadow: var(--shadow-soft); }
+#view-mal .mal-stat .num { font-size: 26px; font-weight: 800; background: linear-gradient(90deg, var(--primary-strong), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+#view-mal .mal-stat .lbl { font-size: 13px; color: var(--text-soft); margin-top: 4px; }
+#view-mal .mal-grid { display: grid; grid-template-columns: 1fr; gap: 22px; margin-bottom: 22px; }
+@media (min-width: 980px) { #view-mal .mal-grid { grid-template-columns: 1.2fr .8fr; } }
+#view-mal .mal-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+#view-mal .mal-card h2 { font-size: 17px; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+#view-mal .mal-chart-wrap { position: relative; height: 420px; }
+#view-mal .mal-tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+#view-mal .mal-tab { padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); cursor: pointer; transition: .2s; }
+#view-mal .mal-tab.active { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: #fff; border-color: transparent; }
+#view-mal .mal-list { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
+.mal-item { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); transition: .2s; }
+.mal-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-soft); }
+.mal-item img { width: 42px; height: 58px; object-fit: cover; border-radius: 6px; flex: none; background: var(--bg-soft); }
+.mal-item-info { flex: 1; min-width: 0; }
+.mal-item-title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mal-item-sub { font-size: 12px; color: var(--text-soft); }
+.mal-item-diff { flex: none; font-weight: 800; font-size: 15px; text-align: right; }
+.mal-item-diff.pos { color: #2e9d8a; }
+.mal-item-diff.neg { color: #e8628a; }
+#view-mal .mal-table-card { margin-top: 22px; }
+#view-mal .mal-toolbar { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+#view-mal .mal-search { flex: 1; min-width: 200px; }
+#view-mal .mal-search input { width: 100%; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-soft); color: var(--text); font-size: 14px; outline: none; }
+#view-mal .mal-search input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+#view-mal .mal-count { font-size: 13px; color: var(--text-soft); }
+#view-mal .mal-table-wrap { overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+#view-mal table.mal-table { width: 100%; border-collapse: collapse; background: var(--surface); }
+#view-mal .mal-table th, #view-mal .mal-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+#view-mal .mal-table th { background: var(--bg-soft); font-weight: 700; color: var(--text-soft); cursor: pointer; user-select: none; white-space: nowrap; }
+#view-mal .mal-table th:hover { color: var(--primary-strong); }
+#view-mal .mal-table th .arrow { font-size: 10px; margin-left: 4px; }
+#view-mal .mal-table tbody tr:hover { background: var(--surface-2); }
+#view-mal .mal-table .cell-title { min-width: 180px; max-width: 260px; }
+#view-mal .mal-table .cell-title .name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-mal .mal-table .cell-title .name a { color: inherit; }
+#view-mal .mal-table .cell-title .alt { font-size: 11px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-mal .mal-table .cell-score { font-weight: 800; }
+#view-mal .diff-val { font-weight: 800; }
+#view-mal .diff-val.pos { color: #2e9d8a; }
+#view-mal .diff-val.neg { color: #e8628a; }
+#view-mal .mal-table .cover-cell { width: 56px; }
+#view-mal .mal-table .cover-cell img { width: 44px; height: 62px; object-fit: cover; border-radius: 6px; background: var(--bg-soft); }
+#view-mal .mal-pagination { display: flex; gap: 6px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+#view-mal .mal-page-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-soft); font-size: 13px; cursor: pointer; }
+#view-mal .mal-page-btn.active { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: #fff; border-color: transparent; }
+#view-mal .mal-page-btn:hover:not(.active) { border-color: var(--primary); color: var(--primary-strong); }
+#view-mal .mal-empty { text-align: center; padding: 40px; color: var(--text-faint); }
+#view-mal .mal-foot { margin-top: 24px; color: var(--text-faint); font-size: 13px; }
+#view-mal .mal-foot a { color: var(--text-soft); text-decoration: underline; }
