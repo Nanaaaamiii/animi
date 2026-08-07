@@ -1,7 +1,7 @@
 /* MAL vs Bangumi 评分/排名对比 — 嵌入 SPA 视图 */
 (function(){
   "use strict";
-  const DATA = (window.MAL_BGM_DATA || []).filter(x => x.bgm_score && x.mal_score);
+  const DATA = (window.MAL_BGM_DATA || []).filter(x => x.bgm_score && x.mal_score && x.bgm_rank && x.mal_rank);
   const PAGE_SIZE = 50;
   let chart = null, chartMode = 'score', initialized = false;
   let filtered = DATA.slice(), sortKey = 'bgm_rank', sortDir = 1, page = 1;
