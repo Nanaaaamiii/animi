@@ -965,6 +965,137 @@ footer { background: var(--bg-soft); border-top: 1px solid var(--border); paddin
   .game-vs{width:42px;height:42px;font-size:18px;}
   .game-setup-row{gap:10px;}
   .game-start{width:100%;margin:6px 0 0;}
+
+/* ============================================================
+   视觉增强  --  滚动条 / 骨架屏 / 微交互 / 动效
+   ============================================================ */
+
+/* ---------- 自定义滚动条 ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border); border-radius: 99px;
+  transition: background .2s;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--primary), var(--accent));
+}
+
+/* ---------- 骨架屏加载动画 ---------- */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-soft) 25%,
+    var(--border) 37%,
+    var(--bg-soft) 63%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease infinite;
+  border-radius: var(--radius-sm);
+}
+.skeleton-card {
+  aspect-ratio: 3/4;
+  border-radius: var(--radius);
+}
+
+/* ---------- 主按钮光泽扫过动画 ---------- */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 60%; height: 100%;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255,255,255,.25) 50%,
+    transparent 100%
+  );
+  transition: left .5s ease;
+}
+.btn-primary:hover::after {
+  left: 120%;
+}
+
+/* ---------- 卡片 hover 光晕 ---------- */
+.anime-card {
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease), filter .3s ease;
+}
+.anime-card::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  opacity: 0;
+  z-index: -1;
+  transition: opacity .35s var(--ease);
+  filter: blur(12px);
+}
+.anime-card:hover::before {
+  opacity: .22;
+}
+
+/* ---------- 页脚渐变分隔线 ---------- */
+footer {
+  position: relative;
+}
+footer::before {
+  content: '';
+  position: absolute;
+  top: -2px; left: 10%; right: 10%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--primary), var(--accent), transparent);
+  border-radius: 2px;
+}
+
+/* ---------- 视图切换淡入过渡 ---------- */
+section:not(.hidden) {
+  animation: viewFadeIn .45s var(--ease) both;
+}
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- 封面滚动行 hover 发光 ---------- */
+.cover-cell:hover .cover-img {
+  filter: brightness(1.08) saturate(1.1);
+  box-shadow:
+    0 14px 30px rgba(225,100,140,.32),
+    0 0 20px rgba(124,108,240,.18);
+}
+
+/* ---------- 导航链接 hover 底色渐变 ---------- */
+.nav-links a {
+  transition: color .2s, background .2s, transform .15s ease;
+}
+.nav-links a:hover {
+  transform: translateY(-1px);
+}
+
+/* ---------- 搜索框聚焦时微弱脉冲 ---------- */
+@keyframes searchPulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--primary-soft); }
+  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary-soft) 60%, transparent); }
+}
+.search-box:focus-within {
+  animation: searchPulse 2s ease-in-out infinite;
+}
+
+/* ---------- 移动端滚动条隐藏 ---------- */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar { width: 0; height: 0; }
+}
+
 }
 
 /* ============================================================
