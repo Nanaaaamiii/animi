@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    K-ON  —  交互逻辑
    SPA 视图切换 / 筛选 / 详情 / Motion.Lab 动效
    ============================================================ */
@@ -73,7 +73,7 @@
   }
 
   /* ---------------- 视图切换 (SPA) ---------------- */
-  const views = ["home", "calendar", "browse", "news", "game", "community", "mine", "mal"];
+  const views = ["home", "calendar", "browse", "news", "game", "community", "mine", "mal", "seiyuu"];
   function showView(name) {
     if (!views.includes(name)) name = "home";
     views.forEach(v => $("#view-" + v).classList.toggle("hidden", v !== name));
@@ -91,6 +91,7 @@
     if (name === "game") renderGameRoot();
     if (name === "news") renderNews();
     if (name === "mal" && window.MalCompare) window.MalCompare.render();
+    if (name === "seiyuu" && window.Seiyuu) window.Seiyuu.render();
     setTimeout(refreshVisibleRatings, 350); // 视图切换后刷新可见卡片的实时评分
   }
 

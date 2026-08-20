@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -26,6 +26,7 @@
         <a href="#" data-view="game">动画小游戏</a>
         <a href="#" data-view="community">社区</a>
         <a href="#" data-view="mal">MAL 对比</a>
+        <a href="#" data-view="seiyuu">声优百科</a>
         <a href="#" data-view="mine">我的</a>
       </nav>
       <div class="nav-right">
@@ -374,6 +375,45 @@
       </div>
     </section>
 
+
+    <!-- ============ 声优百科 ============ -->
+    <section id="view-seiyuu" class="hidden">
+      <div class="seiyuu-hero">
+        <h1>🎙️ 声优百科</h1>
+        <p>发现你喜欢的配音演员的所有作品</p>
+        <div class="seiyuu-stats">
+          <div class="stat">
+            <div class="num" id="stat-seiyuu">0</div>
+            <div class="lbl">位声优</div>
+          </div>
+          <div class="stat">
+            <div class="num" id="stat-anime">0</div>
+            <div class="lbl">部番剧</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="seiyuu-search-wrap">
+        <input type="text" class="seiyuu-search" id="seiyuu-search" placeholder="搜索声优（中文 / 日文 / 罗马字）..." />
+      </div>
+
+      <div class="seiyuu-container">
+        <div class="seiyuu-grid" id="seiyuu-grid"></div>
+        <div class="seiyuu-empty" id="seiyuu-empty" style="display:none">
+          <div class="icon">🔍</div>
+          <p>没有找到匹配的声优</p>
+        </div>
+      </div>
+
+      <!-- 声优详情弹窗 -->
+      <div class="seiyuu-modal" id="seiyuu-modal">
+        <div class="seiyuu-modal-content" id="seiyuu-modal-content">
+          <button class="seiyuu-modal-close" id="seiyuu-modal-close">✕</button>
+          <div id="seiyuu-detail"></div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
 
@@ -404,6 +444,7 @@
           <a href="#" data-view="game">动画小游戏</a>
           <a href="#" data-view="community">社区</a>
           <a href="#" data-view="mal">MAL 对比</a>
+        <a href="#" data-view="seiyuu">声优百科</a>
         </div>
         <div class="foot-col">
           <h5>分类</h5>
@@ -431,6 +472,8 @@
   <script src="js/community.js"></script>
   <script src="js/bgm_sync.js"></script>
   <script src="js/mal_compare.js"></script>
+  <script src="js/seiyuu_data.js"></script>
+  <script src="js/seiyuu.js"></script>
   <script src="js/app.js"></script>
   <script src="js/chat.js"></script>
 </body>

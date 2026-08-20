@@ -1,0 +1,1 @@
+window.SEIYUU_DATA=[];

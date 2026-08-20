@@ -1445,3 +1445,207 @@ section:not(.hidden) {
 #view-mal .mal-empty { text-align: center; padding: 40px; color: var(--text-faint); }
 #view-mal .mal-foot { margin-top: 24px; color: var(--text-faint); font-size: 13px; }
 #view-mal .mal-foot a { color: var(--text-soft); text-decoration: underline; }
+
+/* ============ 声优百科 ============ */
+.seiyuu-hero {
+  text-align: center;
+  padding: 60px 20px 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border-radius: 0 0 24px 24px;
+  margin-bottom: 32px;
+}
+.seiyuu-hero h1 {
+  font-size: 2.5rem;
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+.seiyuu-hero p {
+  font-size: 1.1rem;
+  opacity: 0.9;
+  margin: 0;
+}
+.seiyuu-stats {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 24px;
+}
+.seiyuu-stats .stat {
+  text-align: center;
+}
+.seiyuu-stats .stat .num {
+  font-size: 2rem;
+  font-weight: 700;
+}
+.seiyuu-stats .stat .lbl {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+.seiyuu-search-wrap {
+  max-width: 600px;
+  margin: 0 auto 32px;
+  padding: 0 20px;
+}
+.seiyuu-search {
+  width: 100%;
+  padding: 14px 20px;
+  font-size: 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.seiyuu-search:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+.seiyuu-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
+}
+.seiyuu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+.seiyuu-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #e2e8f0;
+}
+.seiyuu-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+}
+.seiyuu-card .name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1a202c;
+  margin-bottom: 4px;
+}
+.seiyuu-card .name-jp {
+  font-size: 0.85rem;
+  color: #718096;
+  margin-bottom: 12px;
+}
+.seiyuu-card .count {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.seiyuu-card .preview {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.seiyuu-card .preview img {
+  width: 40px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.seiyuu-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+.seiyuu-modal.open {
+  display: flex;
+}
+.seiyuu-modal-content {
+  background: #fff;
+  border-radius: 20px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 32px;
+  position: relative;
+}
+.seiyuu-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.seiyuu-modal-close:hover {
+  background: #e2e8f0;
+}
+.seiyuu-detail-header {
+  margin-bottom: 24px;
+}
+.seiyuu-detail-header .name {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1a202c;
+}
+.seiyuu-detail-header .name-jp {
+  font-size: 1rem;
+  color: #718096;
+  margin-top: 4px;
+}
+.seiyuu-detail-header .count {
+  margin-top: 12px;
+}
+.seiyuu-anime-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+.seiyuu-anime-item {
+  text-align: center;
+}
+.seiyuu-anime-item img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.seiyuu-anime-item .title {
+  font-size: 0.85rem;
+  color: #1a202c;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.seiyuu-anime-item .role {
+  font-size: 0.75rem;
+  color: #667eea;
+  margin-top: 4px;
+}
+.seiyuu-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #718096;
+}
+.seiyuu-empty .icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+}
